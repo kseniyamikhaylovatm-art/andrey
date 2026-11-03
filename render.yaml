@@ -1,0 +1,25 @@
+# Free trial: SQLite uses temporary storage; progress can reset after sleep/restart.
+# The separate render-persistent.yaml is an optional paid deployment.
+services:
+  - type: web
+    name: mi-espanol-andrey-tanya
+    runtime: node
+    plan: free
+    buildCommand: npm ci --include=dev --no-audit --no-fund && npm run build
+    startCommand: npm start
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_VERSION
+        value: 24.19.0
+      - key: NODE_ENV
+        value: production
+      - key: HOST
+        value: 0.0.0.0
+      - key: DATA_DIR
+        value: /tmp/mi-espanol-demo
+      - key: DEMO_MODE
+        value: "true"
+      - key: APP_ACCESS_CODE
+        generateValue: true
+      - key: SESSION_SECRET
+        generateValue: true
