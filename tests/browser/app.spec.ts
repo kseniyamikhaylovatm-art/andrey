@@ -77,3 +77,57 @@ test('speech explains why AI feedback is unavailable and retains the answer draf
  const {state}=await (await page.request.get('/api/state')).json();
  expect(state.speeches).toHaveLength(0);
 });
+
+test('six tabs below the answered card show examples, forms and teacher edits on desktop and mobile',async({page})=>{
+ const response=await page.request.post('/api/cards',{data:{es:'actuar',ru:'действовать',topic:'Тест времён',source:'Урок',examples:[{es:'Actuamos juntos.',ru:'Мы действуем вместе.'}]}});
+ expect(response.ok()).toBe(true);const card=await response.json();
+ await page.setViewportSize({width:1440,height:1100});await page.goto('/#cards');
+ await page.getByRole('combobox',{name:'Выберите тему'}).selectOption('Тест времён');
+ await page.getByRole('button',{name:'Начать тренировку',exact:true}).click();
+ await expect(page.getByRole('tablist',{name:'Времена примеров'})).toHaveCount(0);
+ await page.getByRole('button',{name:'действовать',exact:false}).filter({has:page.locator('.option-letter')}).click();
+ const tabs=page.getByRole('tablist',{name:'Времена примеров'}),panel=page.getByRole('tabpanel');
+ await expect(tabs.getByRole('tab')).toHaveCount(6);
+ const cases=[['Presente','Hoy actúo con calma.'],['Ir a + infinitivo','Mañana voy a actuar con calma.'],['Estoy + gerundio','Ahora estoy actuando con calma.'],['Pretérito perfecto','Hoy he actuado con calma.'],['Pretérito indefinido','Ayer actué con calma.'],['Pretérito imperfecto','Antes actuaba con calma.']];
+ for(const [name,sentence] of cases){await tabs.getByRole('tab',{name,exact:false}).click();await expect(panel.getByText(sentence,{exact:true})).toBeVisible();}
+ await expect(panel.getByRole('button',{name:'Озвучить yo: actuaba',exact:true})).toBeVisible();
+ await tabs.getByRole('tab',{name:'Pretérito imperfecto',exact:false}).focus();await page.keyboard.press('ArrowRight');
+ await expect(tabs.getByRole('tab',{name:'Presente',exact:false})).toHaveAttribute('aria-selected','true');
+ const flash=await page.locator('.practice-card').boundingBox(),context=await page.locator('.tense-context').boundingBox();expect(context!.y).toBeGreaterThanOrEqual(flash!.y+flash!.height);
+ await tabs.getByRole('tab',{name:'Ir a + infinitivo',exact:false}).click();
+ await page.locator('.tense-context').screenshot({path:'test-results/tense-tabs-desktop.png',animations:'disabled'});
+ const before=(await (await page.request.get('/api/state')).json()).state;
+ await panel.getByRole('button',{name:'Исправить или добавить свой пример'}).click();
+ const editor=page.getByRole('dialog');
+ await editor.getByRole('textbox',{name:'Пример на испанском',exact:true}).fill('Mañana voy a actuar con mis compañeros.');
+ await editor.getByRole('textbox',{name:'Перевод примера',exact:true}).fill('Завтра я собираюсь действовать вместе с товарищами.');
+ await editor.getByRole('button',{name:'Сохранить пример'}).click();
+ await expect(panel.getByText('Mañana voy a actuar con mis compañeros.',{exact:true})).toBeVisible();
+ await page.setViewportSize({width:390,height:844});
+ await tabs.getByRole('tab',{name:'Pretérito imperfecto',exact:false}).click();
+ await expect(panel.getByText('Antes actuaba con calma.',{exact:true})).toBeVisible();
+ expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+ await page.locator('.tense-context').screenshot({path:'test-results/tense-tabs-mobile.png',animations:'disabled'});
+ const after=(await (await page.request.get('/api/state')).json()).state;
+ expect(after.attempts.length).toBe(before.attempts.length);
+ const saved=after.cards.find((c:{id:string})=>c.id===card.id),prior=before.cards.find((c:{id:string})=>c.id===card.id);
+ expect(saved.stage).toBe(prior.stage);expect(saved.due).toBe(prior.due);
+ expect(saved.examples).toContainEqual({es:'Actuamos juntos.',ru:'Мы действуем вместе.'});
+ expect(saved.examples.some((e:{tense:string;es:string})=>e.tense==='futuro_proximo'&&e.es==='Mañana voy a actuar con mis compañeros.')).toBe(true);
+});
+
+test('a newly imported word can get a teacher example in a chosen tense without AI',async({page})=>{
+ await page.request.post('/api/import/cards/confirm',{data:{topic:'Новые примеры',source:'Список',cards:[{es:'una brisa suave',ru:'лёгкий бриз'}]}});
+ await page.goto('/#cards');await page.getByRole('combobox',{name:'Выберите тему'}).selectOption('Новые примеры');
+ await page.getByRole('button',{name:'Начать тренировку',exact:true}).click();
+ await page.getByRole('button',{name:'лёгкий бриз',exact:false}).filter({has:page.locator('.option-letter')}).click();
+ await page.getByRole('tab',{name:'Ir a + infinitivo',exact:false}).click();
+ await expect(page.getByRole('tabpanel')).toContainText('пока нет примера');
+ await page.getByRole('tabpanel').getByRole('button',{name:'Добавить пример',exact:true}).click();
+ const editor=page.getByRole('dialog');
+ await editor.getByRole('textbox',{name:'Пример на испанском',exact:true}).fill('Voy a disfrutar de una brisa suave en la playa.');
+ await editor.getByRole('textbox',{name:'Перевод примера',exact:true}).fill('Я собираюсь насладиться лёгким бризом на пляже.');
+ await editor.getByRole('button',{name:'Сохранить пример'}).click();
+ await expect(page.getByRole('tabpanel').getByText('Voy a disfrutar de una brisa suave en la playa.',{exact:true})).toBeVisible();
+ await expect(page.locator('.tense-forms')).toHaveCount(0);
+});

@@ -71,15 +71,18 @@ const special: Record<string, Partial<Record<Tense,string[]>> & {part?:string;ge
   ver:{presente:['veo','ves','ve','vemos','veis','ven'],indefinido:['vi','viste','vio','vimos','visteis','vieron'],imperfecto:['veía','veías','veía','veíamos','veíais','veían'],part:'visto'},
   contar:{presente:['cuento','cuentas','cuenta','contamos','contáis','cuentan']},
   llegar:{indefinido:['llegué','llegaste','llegó','llegamos','llegasteis','llegaron']},
+  actuar:{presente:['actúo','actúas','actúa','actuamos','actuáis','actúan']},
 };
-export const knownVerbs=['hablar','contar','prometer','escaparse','negociar','currar','dejar','llegar','ver','decir','alquilar','quedar','ser','estar','ir','tener','hacer'];
+export const knownVerbs=['hablar','contar','prometer','escaparse','negociar','currar','dejar','llegar','ver','decir','alquilar','quedar','ser','estar','ir','tener','hacer','actuar','remar','revisar','comprar','pasear'];
 export function conjugate(verb:string,tense:Tense):string[]|null {
   if(!knownVerbs.includes(verb)) return null;
   const reflexive=verb.endsWith('se'); const base=reflexive?verb.slice(0,-2):verb;
   const stem=base.slice(0,-2),group=base.slice(-2),sp=special[base];
   let result:string[];
   const ger=sp?.ger||stem+(group==='ar'?'ando':'iendo');
-  if(tense.startsWith('gerundio_')) {
+  if(tense==='futuro_proximo') {
+    result=['voy','vas','va','vamos','vais','van'].map(x=>x+' a '+base);
+  } else if(tense.startsWith('gerundio_')) {
     const aux=tense==='gerundio_presente'?['estoy','estás','está','estamos','estáis','están']:tense==='gerundio_imperfecto'?['estaba','estabas','estaba','estábamos','estabais','estaban']:tense==='gerundio_indefinido'?['estuve','estuviste','estuvo','estuvimos','estuvisteis','estuvieron']:['he estado','has estado','ha estado','hemos estado','habéis estado','han estado'];
     result=aux.map(x=>x+' '+ger);
   } else if(sp?.[tense]) result=sp[tense]!;

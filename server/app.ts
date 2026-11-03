@@ -4,7 +4,9 @@ import { z } from 'zod';
 import { Store } from './store.js';
 import { aiJSON, aiReady, AppError, claude, teacherPrompt } from './ai.js';
 import { conjugate, id, knownVerbs, localSummary, review } from './domain.js';
-import { tenseNames, type AppState, type Card, type Tense } from '../src/types.js';
+import { tenseNames, exampleTenseNames, type AppState, type Card, type Tense, type ExampleTense } from '../src/types.js';
+import {exampleTense as resolveExampleTense} from '../src/example-tenses.js';
+import {cardContext} from './card-context.js';
 import { parseCardPairs } from './card-import.js';
 import { extractPdf } from './pdf.js';
 
@@ -12,6 +14,7 @@ const str=z.string().trim().min(1).max(4000);
 const date=z.iso.date();
 const seconds=z.number().min(0).max(1800).default(0);
 const tense=z.enum(Object.keys(tenseNames) as [Tense,...Tense[]]);
+const exampleTense=z.enum(Object.keys(exampleTenseNames) as [ExampleTense,...ExampleTense[]]);
 const example=z.object({es:str,ru:str,tense:z.string().max(100).optional()});
 const cardInput=z.object({es:str,ru:str,type:z.enum(['word','chunk','construction']).default('word'),topic:str,register:z.enum(['neutral','colloquial','vulgar']).default('neutral'),source:z.string().max(4000).default('Добавлено преподавателем'),examples:z.array(example).max(20).default([]),enabled:z.boolean().optional(),focused:z.boolean().optional()});
 const normalize=(s:string)=>s.trim().toLocaleLowerCase('es').normalize('NFC').replace(/[.!?¿¡]+$/g,'').replace(/\s+/g,' ');
@@ -64,6 +67,14 @@ export function createApp(store:Store) {
     const card=newCard(input);s.cards.push(card);return card;
   }));});
   app.patch('/api/cards/:id',(req,res)=>{const p=cardInput.partial().parse(req.body);res.json(store.mutate(s=>{const c=find(s.cards,req.params.id);if(p.es&&s.cards.some(x=>x.id!==c.id&&normalize(x.es)===normalize(p.es!)))throw new AppError(409,'Такая фраза уже есть в базе.');Object.assign(c,p);return c;}));});
+  app.get('/api/cards/:id/context',(req,res)=>{
+    const state=store.read();res.json(cardContext(find(state.cards,req.params.id),state.verbTables));
+  });
+  app.put('/api/cards/:id/tense-example',(req,res)=>{
+    const input=z.object({tense:exampleTense,es:str,ru:str}).parse(req.body);
+    store.mutate(s=>{const card=find(s.cards,req.params.id);const index=card.examples.findIndex(e=>resolveExampleTense(e.tense)===input.tense);if(index===-1)card.examples.push(input);else card.examples[index]=input;});
+    res.json({ok:true});
+  });
   app.post('/api/review',(req,res)=>{
     const p=z.object({cardId:str,answer:str,seconds}).parse(req.body);
     res.json(store.mutate(s=>{const c=find(s.cards,p.cardId);if(!c.enabled)throw new AppError(400,'Карточка выключена.');const correct=normalize(c.ru)===normalize(p.answer);review(c,correct);s.attempts.push({id:id(),kind:'card',at:new Date().toISOString(),correct,seconds:p.seconds,cardId:c.id,topic:c.topic,answer:p.answer});return {correct,expected:c.ru,card:c};}));
@@ -89,6 +100,14 @@ export function createApp(store:Store) {
   // Bound paid AI requests per workspace, independent of the browser.
   let aiCalls:number[]=[];
   app.use('/api/ai',(_req,res,next)=>{aiCalls=aiCalls.filter(t=>Date.now()-t<3600000);if(aiCalls.length>=80){res.status(429).json({error:'Часовой лимит запросов достигнут. Попробуйте позже.'});return;}aiCalls.push(Date.now());next();});
+  app.post('/api/ai/cards/:id/examples',async(req,res)=>{
+    const card=find(store.read().cards,req.params.id);
+    const raw=await claude(teacherPrompt+' Создай 6 естественных коротких примеров именно с данным словом/фразой и его формами. Верни только JSON-массив [{tense,es,ru}]. Обязательно по одному примеру для ключей: presente, futuro_proximo (только ir a + infinitivo), gerundio_presente (estar + gerundio), perfecto, indefinido, imperfecto. Для существительного меняется время предложения, существительное не спрягай. Для состояний не придумывай неестественное estoy estando: покажи слово в контексте с естественным действием прямо сейчас. Не меняй значение слова, учитывай материалы. Переводи весь пример на русский.',JSON.stringify({es:card.es,ru:card.ru,topic:card.topic,examples:card.examples}));
+    const examples=z.array(z.object({tense:exampleTense,es:str,ru:str})).length(6).parse(aiJSON(raw));
+    if(new Set(examples.map(e=>e.tense)).size!==6)throw new AppError(502,'ИИ не подготовил все шесть времён. Попробуйте ещё раз.');
+    store.mutate(s=>{const current=find(s.cards,req.params.id);const saved=new Set(current.examples.map(e=>resolveExampleTense(e.tense)));current.examples.push(...examples.filter(e=>!saved.has(e.tense)));});
+    res.json({ok:true});
+  });
   app.post('/api/ai/quick-card',async(req,res)=>{const p=z.object({es:str}).parse(req.body);const raw=await claude(teacherPrompt+' Верни только JSON {es,ru,topic,type,register,source,examples:[{es,ru}]}. type: word/chunk/construction, register: neutral/colloquial/vulgar. source: «Быстрое добавление · Claude».',p.es);res.json(cardInput.parse(aiJSON(raw)));});
   app.post('/api/ai/verbs',async(req,res)=>{const p=z.object({verb:z.string().trim().min(2).max(70),tense}).parse(req.body);const raw=await claude(teacherPrompt+' Верни только JSON-массив из 6 точных форм: yo, tú, él, nosotros, vosotros, ellos. Для reflexivos добавь местоимение. Без личных местоимений подлежащего. Проверь ударения.',`${p.verb}, ${tenseNames[p.tense]}`);const forms=z.array(str).length(6).parse(aiJSON(raw));store.mutate(s=>{s.verbTables[p.verb]??={};s.verbTables[p.verb][p.tense]=forms;});res.json({forms});});
   app.post('/api/ai/summary',async(_req,res)=>{const state=store.read();const text=aiReady()?await claude(teacherPrompt+' Напиши краткую сводку к уроку: сделано, проблемы, реальная речь, что взять на урок. Опираться только на данные.',JSON.stringify({summary:localSummary(state),recentAttempts:state.attempts.slice(-100),speech:state.speeches.slice(-5),diary:state.diary.slice(-10),dialogues:state.dialogs.slice(-3)})):localSummary(state);const summary={text,date:new Date().toISOString()};store.mutate(s=>{s.summary=summary;});res.json(summary);});

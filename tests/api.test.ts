@@ -47,6 +47,19 @@ test('HTTP workflow: answers, teacher corrections, PDF extraction, shared data a
   const invalid=await request('/import/cards/confirm',{...batch,cards:[{es:'новая карточка',ru:'новый перевод'},{es:'без перевода',ru:''}]});assert.equal(invalid.status,400);assert.equal(store.read().cards.length,total,'Reject the entire invalid batch');
   assert.equal((await request('/import/cards/confirm',{...batch,cards:[]})).status,400);
   assert.equal((await request('/import/cards/confirm',{...batch,cards:Array.from({length:1001},()=>({es:'casa',ru:'дом'}))})).status,400);
+  const attemptsBefore=store.read().attempts.length,cardBefore=store.read().cards[0];
+  const context=await request('/cards/'+card.id+'/context');assert.equal(context.status,200);assert.equal(context.body.examples.length,6);assert.match(context.body.examples[1].es,/voy a/);
+  assert.equal(store.read().attempts.length,attemptsBefore,'Reading examples must not record an answer');
+  const customExample={tense:'futuro_proximo',es:'Mañana voy a pasear por mi barrio con Ana.',ru:'Завтра я собираюсь погулять по своему району с Аной.'};
+  assert.equal((await request('/cards/'+card.id+'/tense-example',customExample,'PUT')).status,200);
+  const updated=await request('/cards/'+card.id+'/context');assert.equal(updated.body.examples.find((e:{tense:string})=>e.tense==='futuro_proximo').es,customExample.es);
+  const cardAfter=store.read().cards[0];assert.equal(cardAfter.due,cardBefore.due);assert.equal(cardAfter.stage,cardBefore.stage);assert.equal(cardAfter.correct,cardBefore.correct);assert.equal(cardAfter.seen,cardBefore.seen);assert.deepEqual(cardAfter.examples.slice(0,cardBefore.examples.length),cardBefore.examples);
+  assert.equal((await request('/cards/'+card.id+'/tense-example',{...customExample,tense:'pluscuamperfecto'},'PUT')).status,400);
+  assert.equal((await request('/cards/missing/context')).status,404);
+  const secondFuture={tense:'futuro_proximo',es:'Vamos a pasear por el barrio.',ru:'Мы собираемся погулять по району.'};
+  store.mutate(s=>s.cards[0].examples.push(secondFuture));
+  assert.equal((await request('/cards/'+card.id+'/tense-example',{...customExample,es:'Voy a pasear por el barrio.'},'PUT')).status,200);
+  assert.ok(store.read().cards[0].examples.some(e=>e.es===secondFuture.es),'Editing the first example must preserve other source examples in the same tense');
  }finally{await new Promise<void>((resolve,reject)=>server.close(e=>e?reject(e):resolve()));store.close();rmSync(dir,{recursive:true});}
 });
 test('shared access code protects data and survives a new browser session only with a valid signed cookie',async()=>{
