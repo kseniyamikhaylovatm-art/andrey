@@ -32,11 +32,27 @@ test('HTTP workflow: answers, teacher corrections, PDF extraction, shared data a
   const pr=await fetch(`http://127.0.0.1:${port}/api/import/pdf`,{method:'POST',headers:{'content-type':'application/pdf'},body:Buffer.from(pdf)});assert.equal(pr.status,200);assert.match((await pr.json()).text,/mercado del barrio/);
   const draft={title:'Imported lesson',transcript:source,topics:['Рынок'],assignments:['Рассказать о рынке'],cards:[{es:card.es,ru:card.ru,topic:'Рынок'}, {es:'el puesto',ru:'прилавок',topic:'Рынок'}]};
   const confirmation=await request('/import/confirm',draft);assert.equal(confirmation.body.added,1);assert.equal(confirmation.body.duplicates,1);assert.equal(store.read().lessons.at(-1)?.text,source);
+  const before=store.read();
+  const preview=await request('/import/cards/preview',{text:'el bosque — лес\nsubir - подниматься\nбез разделителя'});
+  assert.equal(preview.status,200);assert.equal(preview.body.cards.length,2);assert.equal(preview.body.issues.length,1);
+  assert.equal(store.read().cards.length,before.cards.length,'Preview must not save anything');
+  const batch={topic:'Природа',source:'Карточки.pdf',cards:[...preview.body.cards,{es:' EL BOSQUE ',ru:'другое значение'},{es:card.es,ru:'изменённый перевод'}]};
+  const imported=await request('/import/cards/confirm',batch);assert.deepEqual(imported.body,{added:2,duplicates:2});
+  assert.deepEqual(store.read().cards.find(c=>c.id===card.id),before.cards.find(c=>c.id===card.id),'Duplicate import must preserve translation, scheduling and attempts');
+  const importedCard=store.read().cards.find(c=>c.es==='el bosque')!;assert.equal(importedCard.ru,'лес');assert.equal(importedCard.source,'Карточки.pdf');assert.equal(importedCard.seen,0);assert.equal(importedCard.stage,0);
+  assert.ok(store.read().plan.topics.includes('Природа'));
+  const repeated=await request('/import/cards/confirm',batch);assert.deepEqual(repeated.body,{added:0,duplicates:4});
+  assert.equal(store.read().lessons.length,before.lessons.length,'Vocabulary import must not add a held or planned lesson');
+  const total=store.read().cards.length;
+  const invalid=await request('/import/cards/confirm',{...batch,cards:[{es:'новая карточка',ru:'новый перевод'},{es:'без перевода',ru:''}]});assert.equal(invalid.status,400);assert.equal(store.read().cards.length,total,'Reject the entire invalid batch');
+  assert.equal((await request('/import/cards/confirm',{...batch,cards:[]})).status,400);
+  assert.equal((await request('/import/cards/confirm',{...batch,cards:Array.from({length:1001},()=>({es:'casa',ru:'дом'}))})).status,400);
  }finally{await new Promise<void>((resolve,reject)=>server.close(e=>e?reject(e):resolve()));store.close();rmSync(dir,{recursive:true});}
 });
 test('shared access code protects data and survives a new browser session only with a valid signed cookie',async()=>{
  const old=process.env.APP_ACCESS_CODE;process.env.APP_ACCESS_CODE='test-access-code-only';const dir=mkdtempSync(join(tmpdir(),'es-auth-'));const store=new Store(dir);const server=createApp(store).listen(0,'127.0.0.1');await new Promise<void>(r=>server.once('listening',r));const base=`http://127.0.0.1:${(server.address() as {port:number}).port}`;
  try{assert.equal((await fetch(base+'/api/state')).status,401);assert.equal((await fetch(base+'/api/export')).status,401);
+ assert.equal((await fetch(base+'/api/import/cards/confirm',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({topic:'Test',source:'Test',cards:[{es:'uno',ru:'один'}]})})).status,401);
  const login=await fetch(base+'/api/login',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({code:'test-access-code-only'})});assert.equal(login.status,200);const cookie=login.headers.get('set-cookie')!.split(';')[0];assert.equal((await fetch(base+'/api/state',{headers:{cookie}})).status,200);assert.equal((await fetch(base+'/api/state',{headers:{cookie:cookie+'forged'}})).status,401);
  }finally{if(old===undefined)delete process.env.APP_ACCESS_CODE;else process.env.APP_ACCESS_CODE=old;await new Promise<void>(r=>server.close(()=>r()));store.close();rmSync(dir,{recursive:true});}
 });

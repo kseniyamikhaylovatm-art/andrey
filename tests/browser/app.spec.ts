@@ -30,3 +30,50 @@ test('all eight tabs work on a phone without horizontal overflow',async({page})=
  await page.screenshot({path:'test-results/mobile-plan.png',fullPage:true,animations:'disabled'});
 });
 test('desktop plan visual',async({page})=>{await page.setViewportSize({width:1440,height:1100});await page.goto('/');await expect(page.getByRole('heading',{name:'Ваш маршрут'})).toBeVisible();await page.screenshot({path:'test-results/desktop-plan.png',fullPage:true,animations:'disabled'});});
+
+test('import a real Cyrillic PDF as multiple cards without AI, edit before saving and skip duplicates', async ({ page, browser }) => {
+ const printPage=await browser.newPage();
+ await printPage.setContent('<!doctype html><meta charset="utf-8"><style>p{font:18px Arial; margin:18px}</style><p>Карточки урока</p><p>el faro — маяк</p><p>la marea – прилив</p><p>remar - грести</p>');
+ const pdf=await printPage.pdf();await printPage.close();
+ await page.goto('/#cards');
+ const before=(await (await page.request.get('/api/state')).json()).state;
+ await page.getByRole('button',{name:'Загрузить PDF карточек',exact:true}).click();
+ const modal=page.getByRole('dialog');
+ await modal.getByLabel('Выберите PDF карточек', {exact:true}).setInputFiles({name:'Сёрфинг.pdf',mimeType:'application/pdf',buffer:pdf});
+ await expect(modal.getByRole('heading',{name:'Проверьте карточки'})).toBeVisible();
+ await expect(modal.getByLabel('Испанский · карточка 1')).toHaveValue('el faro');
+ await expect(modal.getByLabel('Перевод · карточка 1')).toHaveValue('маяк');
+ await expect(modal.getByLabel('Испанский · карточка 3')).toHaveValue('remar');
+ await expect(modal.getByText('Не удалось разобрать строк: 1.')).toBeVisible();
+ expect((await (await page.request.get('/api/state')).json()).state.cards.length).toBe(before.cards.length);
+ await modal.getByLabel('Перевод · карточка 2').fill('прилив и отлив');
+ await modal.getByRole('button',{name:'Не добавлять карточку 3'}).click();
+ await modal.getByLabel('Тема для всех карточек').fill('Сёрфинг');
+ await modal.getByRole('button',{name:'Добавить все карточки'}).click();
+ await expect(modal.getByRole('status')).toContainText('Добавлено: 2');
+ await modal.getByRole('button',{name:'Закрыть',exact:true}).click();
+ await page.getByRole('button',{name:'База фраз',exact:false}).click();
+ await page.getByRole('textbox',{name:'Поиск по базе'}).fill('la marea');
+ await expect(page.locator('.vocab-row')).toContainText('прилив и отлив');
+ await page.reload();await page.getByRole('button',{name:'Загрузить PDF карточек',exact:true}).click();
+ await modal.getByLabel('Список карточек · можно вставить текст или исправить строки из PDF').fill('el faro — новое значение\nla marea — другое значение');
+ await modal.getByRole('button',{name:'Проверить список'}).click();
+ await modal.getByRole('button',{name:'Добавить все карточки'}).click();
+ await expect(modal.getByRole('status')).toContainText('Повторов пропущено: 2');
+ const after=(await (await page.request.get('/api/state')).json()).state;
+ expect(after.cards.length).toBe(before.cards.length+2);
+ expect(after.cards.find((c:{es:string})=>c.es==='la marea').ru).toBe('прилив и отлив');
+ expect(after.cards.find((c:{es:string})=>c.es==='el faro').source).toBe('Сёрфинг.pdf');
+});
+
+test('speech explains why AI feedback is unavailable and retains the answer draft', async ({page}) => {
+ await page.goto('/#speech');
+ const answer=page.getByLabel('Ваш ответ · текстом или голосом');
+ await answer.fill('Hoy he hablado con mi vecino sobre las clases de surf.');
+ await expect(page.getByRole('button',{name:'ИИ-проверка не подключена',exact:true})).toBeDisabled();
+ await expect(page.getByRole('note').filter({hasText:'Для обратной связи преподавателю нужно подключить ИИ'})).toBeVisible();
+ await page.reload();
+ await expect(answer).toHaveValue('Hoy he hablado con mi vecino sobre las clases de surf.');
+ const {state}=await (await page.request.get('/api/state')).json();
+ expect(state.speeches).toHaveLength(0);
+});

@@ -5,6 +5,8 @@ import { Store } from './store.js';
 import { aiJSON, aiReady, AppError, claude, teacherPrompt } from './ai.js';
 import { conjugate, id, knownVerbs, localSummary, review } from './domain.js';
 import { tenseNames, type AppState, type Card, type Tense } from '../src/types.js';
+import { parseCardPairs } from './card-import.js';
+import { extractPdf } from './pdf.js';
 
 const str=z.string().trim().min(1).max(4000);
 const date=z.iso.date();
@@ -103,10 +105,29 @@ export function createApp(store:Store) {
   });
   app.post('/api/ai/listening',async(req,res)=>{const p=z.object({audioId:str,answer:str,seconds}).parse(req.body);const a=find(store.read().audios,p.audioId);const feedback=await claude(teacherPrompt+' Дай обратную связь на открытый вопрос по аудио. Объясни смысл, что ученик понял и что упустил. Не используй бинарную отметку верно/неверно.',JSON.stringify({text:a.transcript,question:a.question,reference:a.answer,answer:p.answer}));store.mutate(s=>s.attempts.push({id:id(),kind:'listening',at:new Date().toISOString(),correct:null,seconds:p.seconds,topic:a.topic,answer:p.answer}));res.json({feedback,transcript:a.transcript,reference:a.answer});});
   app.post('/api/import/pdf',express.raw({type:'application/pdf',limit:'15mb'}),async(req,res)=>{
-    if(!Buffer.isBuffer(req.body)||req.body.subarray(0,4).toString()!=='%PDF')throw new AppError(400,'Выберите PDF-файл до 15 МБ.');
-    const { getDocument }=await import('pdfjs-dist/legacy/build/pdf.mjs');
-    const pdf=await getDocument({data:new Uint8Array(req.body),useSystemFonts:true}).promise;
-    try {if(pdf.numPages>150)throw new AppError(400,'В файле больше 150 страниц. Загрузите его частями.');const pages=[];for(let i=1;i<=pdf.numPages;i++){const page=await pdf.getPage(i);const c=await page.getTextContent();pages.push(c.items.map(x=>'str' in x?x.str:'').join(' '));}const text=pages.join('\n\n');if(text.trim().length<30)throw new AppError(422,'В PDF не найден текст. Для скана сначала нужно распознавание текста.');res.json({pages,text});}finally{await pdf.destroy();}
+    if(!Buffer.isBuffer(req.body))throw new AppError(400,'Выберите PDF-файл до 15 МБ.');
+    res.json(await extractPdf(req.body));
+  });
+  app.post('/api/import/cards/preview',(req,res)=>{
+    const {text}=z.object({text:z.string().trim().min(1).max(200000)}).parse(req.body);
+    const preview=parseCardPairs(text);
+    if(preview.cards.length>1000)throw new AppError(400,'За один раз можно добавить до 1000 карточек. Разделите список на части.');
+    res.json(preview);
+  });
+  app.post('/api/import/cards/confirm',(req,res)=>{
+    const input=z.object({cards:z.array(z.object({es:str,ru:str})).min(1).max(1000),topic:str,source:str}).parse(req.body);
+    let added=0;
+    store.mutate(s=>{
+      const existing=new Set(s.cards.map(c=>normalize(c.es)));
+      for(const pair of input.cards){
+        const key=normalize(pair.es);
+        if(existing.has(key))continue;
+        s.cards.push(newCard(cardInput.parse({...pair,topic:input.topic,source:input.source,type:/\s/.test(pair.es)?'chunk':'word'})));
+        existing.add(key);added++;
+      }
+      if(added&&!s.plan.topics.includes(input.topic))s.plan.topics.push(input.topic);
+    });
+    res.json({added,duplicates:input.cards.length-added});
   });
   app.post('/api/ai/document',async(req,res)=>{const p=z.object({text:z.string().trim().min(30).max(35000),source:str}).parse(req.body);const raw=await claude(teacherPrompt+' Разбери фрагмент урока. Верни только JSON {title,transcript,cards:[{es,ru,type,topic,register,source,examples:[{es,ru,tense}]}],topics:[строки],assignments:[строки]}. Сохраняй транскрипцию целиком, источник и регистр. Добавь примеры к словам без примеров. Ключи к упражнениям не добавляй в открытые формулировки заданий. Строка таблицы — карточка; конструкции с пропуском — construction, фразы — chunk. Не придумывай содержание исходного документа.',JSON.stringify(p));res.json(documentSchema.parse(aiJSON(raw)));});
   app.post('/api/import/confirm',(req,res)=>{const p=documentSchema.parse(req.body);let added=0;store.mutate(s=>{const keys=new Set(s.cards.map(c=>normalize(c.es)));for(const c of p.cards){if(!keys.has(normalize(c.es))){s.cards.push(newCard(c));keys.add(normalize(c.es));added++;}}s.plan.topics=[...new Set([...s.plan.topics,...p.topics])];s.lessons.push({id:id(),date:new Date().toISOString().slice(0,10),title:p.title,status:'planned',note:'Материал из PDF · подтверждено преподавателем',text:p.transcript});for(const title of p.assignments)s.assignments.push({id:id(),title,due:new Date(Date.now()+7*86400000).toISOString().slice(0,10),done:false});});res.json({added,duplicates:p.cards.length-added});});
