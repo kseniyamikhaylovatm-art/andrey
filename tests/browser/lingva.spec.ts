@@ -7,7 +7,7 @@ test('13 mixed tasks complete with errors repeated at the end on a phone',async(
  await page.request.post('/api/login',{data:{code:student.code}});
  await page.addInitScript(id=>sessionStorage.setItem('mi:selected-student',id),student.student.id);
  await page.setViewportSize({width:390,height:844});await page.goto('/#cards?view=lingva');
- await expect(page.getByRole('heading',{name:'Ксюша Лингва',exact:true})).toBeVisible();
+ await expect(page.getByRole('heading',{name:'Упражнение формат дуолинго',exact:true})).toBeVisible();
  await page.getByRole('button',{name:'Начать 13 заданий',exact:true}).click();
  for(let i=0;i<14;i++){
   await page.getByRole('textbox',{name:'Ваш ответ',exact:true}).fill(i===0?'adios':'hola');

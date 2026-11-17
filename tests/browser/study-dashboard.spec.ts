@@ -9,8 +9,8 @@ test('home is a functional study dashboard with no decorative illustration or sl
   const total=state.cards.length;
   await expect(page.getByText('Всего в базе: '+total+' карточек',{exact:true})).toBeVisible();
   await page.getByRole('button',{name:'Выбрать формат',exact:true}).click();
-  await expect(page.getByRole('button',{name:'Слова в контексте',exact:true})).toBeVisible();
-  await expect(page.getByRole('button',{name:'Карточки памяти',exact:true})).toBeVisible();
+  await expect(page.getByRole('button',{name:'Упражнения формат 17 языков',exact:true})).toBeVisible();
+  await expect(page.getByRole('button',{name:'Формат Анки',exact:true})).toBeVisible();
   await page.goto('/');await page.getByRole('button',{name:'Открыть диалог',exact:true}).click();
   await expect(page.getByRole('heading',{name:'Сначала выберем ситуацию',exact:true})).toBeVisible();
   await page.goto('/');await page.getByRole('button',{name:'Открыть пересказ',exact:true}).click();

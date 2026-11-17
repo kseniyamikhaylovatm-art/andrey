@@ -19,7 +19,7 @@ test('format tiles open illustrated choices, honest recall and Lingva with the s
  const cards=await pupil(page);await page.setViewportSize({width:1440,height:1100});await page.goto('/#cards');
  await expect(page.locator('.practice-format-card')).toHaveCount(3);await expect(page.locator('.segmented')).toHaveCount(0);await expect(page.getByRole('combobox',{name:'Слова какого урока'})).toHaveCount(0);
  await page.screenshot({path:'test-results/practice-formats-desktop.png',fullPage:true,animations:'disabled'});
- await page.getByRole('button',{name:'Слова в контексте',exact:true}).click();await page.getByRole('combobox',{name:'Как тренировать'}).selectOption('choice');await page.getByRole('button',{name:'Начать тренировку',exact:true}).click();
+ await page.getByRole('button',{name:'Упражнения формат 17 языков',exact:true}).click();await page.getByRole('combobox',{name:'Как тренировать'}).selectOption('choice');await page.getByRole('button',{name:'Начать тренировку',exact:true}).click();
  await expect(page.locator('.picture-choice')).toHaveCount(4);await expect(page.locator('.choice-illustration')).toHaveCount(4);await expect(page.locator('.choice-illustration img')).toHaveCount(1);
  const first=await page.locator('.flashcard-word h2').innerText(),wrong=cards.find(c=>c.es!==first)!;
  await page.locator('.picture-choice').filter({hasText:wrong.ru}).click();await expect(page.locator('.answer-feedback')).toContainText('10 минут');await expect.poll(()=>tones(page)).toEqual([220,164.81]);
@@ -27,16 +27,16 @@ test('format tiles open illustrated choices, honest recall and Lingva with the s
  await page.getByRole('button',{name:'Следующая фраза',exact:false}).click();const second=await page.locator('.flashcard-word h2').innerText(),right=cards.find(c=>c.es===second)!;
  await page.locator('.picture-choice').filter({hasText:right.ru}).click();await expect(page.locator('.answer-feedback')).toContainText('Поздравляем');await expect.poll(()=>tones(page)).toEqual([220,164.81,659.25,880]);
  await page.screenshot({path:'test-results/illustrated-choices-desktop.png',fullPage:true,animations:'disabled'});
- await page.getByRole('button',{name:'Все форматы',exact:true}).click();await page.getByRole('button',{name:'Карточки памяти',exact:true}).click();await page.getByRole('button',{name:'Начать тренировку',exact:true}).click();
+ await page.getByRole('button',{name:'Все форматы',exact:true}).click();await page.getByRole('button',{name:'Формат Анки',exact:true}).click();await page.getByRole('button',{name:'Начать тренировку',exact:true}).click();
  await expect(page.locator('.tense-context')).toHaveCount(0);await expect(page.locator('.picture-choice')).toHaveCount(0);
  await page.getByRole('button',{name:'Подсказка',exact:true}).click();await page.getByRole('button',{name:'Вспомнил',exact:true}).click();await expect(page.locator('.answer-feedback')).toContainText('Поздравляем');await expect(page.locator('.tense-context')).toHaveCount(0);
- await page.getByRole('button',{name:'Все форматы',exact:true}).click();await page.getByRole('button',{name:'Ксюша Лингва',exact:true}).click();await expect(page.getByRole('button',{name:'Начать 13 заданий',exact:true})).toBeVisible();
+ await page.getByRole('button',{name:'Все форматы',exact:true}).click();await page.getByRole('button',{name:'Упражнение формат дуолинго',exact:true}).click();await expect(page.getByRole('button',{name:'Начать 13 заданий',exact:true})).toBeVisible();
 });
 test('Russian to Spanish choices show real Spanish labels and stay usable on a phone',async({page})=>{
  const cards=await pupil(page);await page.setViewportSize({width:390,height:844});await page.goto('/#cards');
  await expect(page.locator('.practice-format-card')).toHaveCount(3);const tile=await page.locator('.practice-format-card').first().boundingBox();expect(Math.abs(tile!.width-tile!.height)).toBeLessThan(2);
  await page.screenshot({path:'test-results/practice-formats-mobile.png',fullPage:true,animations:'disabled'});
- await page.getByRole('button',{name:'Слова в контексте',exact:true}).click();await page.getByRole('combobox',{name:'Как тренировать'}).selectOption('choice');await page.getByRole('combobox',{name:'Направление перевода'}).selectOption('ru-es');await page.getByRole('button',{name:'Начать тренировку',exact:true}).click();
+ await page.getByRole('button',{name:'Упражнения формат 17 языков',exact:true}).click();await page.getByRole('combobox',{name:'Как тренировать'}).selectOption('choice');await page.getByRole('combobox',{name:'Направление перевода'}).selectOption('ru-es');await page.getByRole('button',{name:'Начать тренировку',exact:true}).click();
  const prompt=await page.locator('.flashcard-word h2').innerText(),card=cards.find(c=>c.ru===prompt)!;expect(card).toBeTruthy();await expect(page.locator('.picture-choice')).toHaveCount(4);
  for(const item of cards)await expect(page.locator('.picture-choice-label').filter({hasText:item.es})).toBeVisible();
  await page.locator('.picture-choice').filter({hasText:card.es}).click();await expect(page.locator('.answer-feedback')).toContainText('Поздравляем');await expect(page.locator('.choice-expected')).toContainText(card.es);
