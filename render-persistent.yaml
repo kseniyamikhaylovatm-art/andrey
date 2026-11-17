@@ -22,5 +22,7 @@ services:
         value: /var/data/mi-espanol
       - key: APP_ACCESS_CODE
         generateValue: true
+      - key: TEACHER_ACCESS_CODE
+        generateValue: true
       - key: SESSION_SECRET
         generateValue: true

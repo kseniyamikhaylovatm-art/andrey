@@ -1,5 +1,5 @@
 import express from 'express';
-import { createHmac, timingSafeEqual, randomBytes } from 'node:crypto';
+import {accessControl,type Principal} from './access.js';
 import { z } from 'zod';
 import { Store } from './store.js';
 import { aiJSON, aiReady, AppError, claude, teacherPrompt } from './ai.js';
@@ -18,7 +18,6 @@ const exampleTense=z.enum(Object.keys(exampleTenseNames) as [ExampleTense,...Exa
 const example=z.object({es:str,ru:str,tense:z.string().max(100).optional()});
 const cardInput=z.object({es:str,ru:str,type:z.enum(['word','chunk','construction']).default('word'),topic:str,register:z.enum(['neutral','colloquial','vulgar']).default('neutral'),source:z.string().max(4000).default('Добавлено преподавателем'),examples:z.array(example).max(20).default([]),enabled:z.boolean().optional(),focused:z.boolean().optional()});
 const normalize=(s:string)=>s.trim().toLocaleLowerCase('es').normalize('NFC').replace(/[.!?¿¡]+$/g,'').replace(/\s+/g,' ');
-const safeEqual=(a:string,b:string)=>{const x=Buffer.from(a),y=Buffer.from(b);return x.length===y.length&&timingSafeEqual(x,y);};
 const find=<T extends {id:string}>(items:T[],key:string)=>{const x=items.find(v=>v.id===key);if(!x)throw new AppError(404,'Запись не найдена. Обновите страницу.');return x;};
 const lessonInput=z.object({date,title:str,note:z.string().max(8000).default(''),status:z.enum(['planned','held','cancelled']).default('planned'),text:z.string().max(100000).optional(),video:z.union([z.literal(''),z.url().startsWith('https://')]).optional()});
 const audioInput=z.object({title:str,url:z.union([z.literal(''),z.url().startsWith('https://')]),transcript:z.string().max(15000),question:str,answer:str,topic:str});
@@ -28,40 +27,66 @@ function newCard(input:z.infer<typeof cardInput>):Card {return {...input,id:id()
 
 export function createApp(store:Store) {
   const app=express(); app.disable('x-powered-by');
-  const code=process.env.APP_ACCESS_CODE||'';
-  const secret=process.env.SESSION_SECRET||randomBytes(32).toString('hex');
-  if(process.env.NODE_ENV==='production'&&(code.length<10||!process.env.SESSION_SECRET||process.env.SESSION_SECRET.length<32)) throw new Error('Production requires APP_ACCESS_CODE (10+ chars) and SESSION_SECRET (32+ chars).');
-  const signature=(s:string)=>createHmac('sha256',secret).update(s).digest('hex');
-  const authenticated=(req:express.Request)=>{
-    if(!code)return true;
-    const token=req.headers.cookie?.split(';').map(v=>v.trim()).find(v=>v.startsWith('mi_session='))?.slice(11);
-    if(!token)return false;
-    const [expires,sig]=token.split('.');return Number(expires)>Date.now()&&Boolean(sig)&&safeEqual(signature(expires),sig);
-  };
+  const access=accessControl(store);
+  const studentPrompt=()=>{const {plan}=store.read();return teacherPrompt+' Учебный профиль: '+JSON.stringify({level:plan.level,goal:plan.goal});};
+  if(process.env.NODE_ENV==='production')app.set('trust proxy',1);
   app.use((req,res,next)=>{
     res.setHeader('X-Content-Type-Options','nosniff');res.setHeader('Referrer-Policy','same-origin');res.setHeader('X-Frame-Options','SAMEORIGIN');
     if(req.path.startsWith('/api/'))res.setHeader('Cache-Control','no-store');
     const origin=req.headers.origin;
-    if(!['GET','HEAD','OPTIONS'].includes(req.method)&&origin&&new URL(origin).host!==req.headers.host){res.status(403).json({error:'Запрос с другого сайта отклонён.'});return;}
+    if(!['GET','HEAD','OPTIONS'].includes(req.method)&&origin){
+      let sameOrigin=false;try{sameOrigin=new URL(origin).host===req.headers.host;}catch{/* reject malformed origins too */}
+      if(!sameOrigin){res.status(403).json({error:'Запрос с другого сайта отклонён.'});return;}
+    }
     next();
   });
   app.use(express.json({limit:'2mb'}));
   app.get('/api/health',(_req,res)=>res.json({ok:true}));
-  app.get('/api/session',(req,res)=>res.json({authenticated:authenticated(req),protected:Boolean(code)}));
+  app.get('/api/session',(req,res)=>res.json(access.session(access.principal(req))));
   const loginAttempts=new Map<string,{n:number;until:number}>();
   app.post('/api/login',(req,res)=>{
     const key=req.ip||'local',current=loginAttempts.get(key),a=current&&current.until>Date.now()?current:{n:0,until:Date.now()+600000};
     loginAttempts.set(key,a);
     if(a.n>=10){res.status(429).json({error:'Слишком много попыток. Повторите через 10 минут.'});return;}
     a.n++;
-    if(typeof req.body?.code!=='string'||!safeEqual(req.body.code,code)){res.status(401).json({error:'Неверный код доступа.'});return;}
-    loginAttempts.delete(key);const expires=String(Date.now()+7*86400000);
-    res.setHeader('Set-Cookie',`mi_session=${expires}.${signature(expires)}; Path=/; HttpOnly; SameSite=Strict; Max-Age=604800${process.env.NODE_ENV==='production'?'; Secure':''}`);res.json({ok:true});
+    const principal=access.login(req.body?.code);
+    if(!principal){res.status(401).json({error:'Неверный код доступа.'});return;}
+    loginAttempts.delete(key);access.setCookie(res,principal);res.json(access.session(principal));
   });
-  app.use('/api',(req,res,next)=>{if(!authenticated(req)){res.status(401).json({error:'Введите общий код доступа.'});return;}next();});
+  app.use('/api',(req,res,next)=>{const principal=access.principal(req);if(!principal){res.status(401).json({error:'Войдите по личному коду доступа.'});return;}res.locals.principal=principal;next();});
   app.post('/api/logout',(_req,res)=>{res.setHeader('Set-Cookie','mi_session=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0');res.json({ok:true});});
-  app.get('/api/state',(_req,res)=>res.json({state:store.read(),meta:{ai:aiReady(),protected:Boolean(code),verbs:knownVerbs,demo:process.env.DEMO_MODE==='true'}}));
-  app.get('/api/export',(_req,res)=>{res.setHeader('Content-Disposition','attachment; filename="mi-espanol-backup.json"');res.json({version:1,exportedAt:new Date().toISOString(),state:store.read()});});
+  const teacherOnly:express.RequestHandler=(_req,res,next)=>{if((res.locals.principal as Principal).role!=='teacher'){res.status(403).json({error:'Это действие доступно только преподавателю.'});return;}next();};
+  app.use('/api/students',teacherOnly);
+  app.get('/api/students',(_req,res)=>res.json({students:store.listStudents()}));
+  app.post('/api/students',(req,res)=>{
+    const input=z.object({name:z.string().trim().min(1).max(120),level:z.string().trim().min(1).max(80).default('A1'),examples:z.boolean().default(false)}).parse(req.body);
+    res.status(201).json(store.createStudent(input.name,input.level,input.examples));
+  });
+  app.post('/api/students/:studentId/code',(req,res)=>{if(!store.student(req.params.studentId))throw new AppError(404,'Ученик не найден.');res.json({code:store.rotateCode(req.params.studentId)});});
+  app.patch('/api/students/:studentId',(req,res)=>{if(!store.student(req.params.studentId))throw new AppError(404,'Ученик не найден.');const {name}=z.object({name:z.string().trim().min(1).max(120)}).parse(req.body);store.renameStudent(req.params.studentId,name);res.json(store.profile(req.params.studentId));});
+  app.use('/api',(req,res,next)=>{
+    const principal=res.locals.principal as Principal;
+    const selected=req.headers['x-student-id']??req.query.studentId;
+    if(selected!==undefined&&typeof selected!=='string'){res.status(400).json({error:'Выберите кабинет ученика.'});return;}
+    if(principal.role==='student'&&selected&&selected!==principal.studentId){res.status(403).json({error:'Доступ к другому кабинету закрыт.'});return;}
+    const studentId=principal.role==='student'?principal.studentId:selected||'legacy';
+    if(!store.student(studentId)){res.status(404).json({error:'Кабинет не найден.'});return;}
+    res.locals.studentId=studentId;
+    store.withStudent(studentId,next);
+  });
+  // Enforce permissions on the server, including requests made outside the interface.
+  app.use('/api',(req,res,next)=>{
+    if((res.locals.principal as Principal).role==='teacher'||['GET','HEAD','OPTIONS'].includes(req.method)){next();return;}
+    const permitted=(req.method==='POST'&&['/review','/verbs/review','/diary','/listening/review','/ai/speech','/ai/dialog','/ai/listening','/import/pdf','/import/cards/preview','/import/cards/confirm'].includes(req.path))
+      ||(req.method==='PATCH'&&/^\/assignments\/[^/]+$/.test(req.path));
+    if(req.method==='PATCH'&&/^\/cards\/[^/]+$/.test(req.path)){
+      req.body=z.object({focused:z.boolean()}).strict().parse(req.body);next();return;
+    }
+    if(!permitted){res.status(403).json({error:'Это действие доступно только преподавателю.'});return;}
+    next();
+  });
+  app.get('/api/state',(_req,res)=>res.json({state:store.read(),meta:{ai:aiReady(),protected:access.session(res.locals.principal).protected,verbs:knownVerbs,demo:process.env.DEMO_MODE==='true',role:(res.locals.principal as Principal).role,student:store.profile(res.locals.studentId)}}));
+  app.get('/api/export',(_req,res)=>{res.setHeader('Content-Disposition','attachment; filename="mi-espanol-backup.json"');res.json({version:2,exportedAt:new Date().toISOString(),student:store.profile(res.locals.studentId),state:store.read()});});
   app.post('/api/cards',(req,res)=>{const input=cardInput.parse(req.body);res.json(store.mutate(s=>{
     if(s.cards.some(c=>normalize(c.es)===normalize(input.es)))throw new AppError(409,'Такая фраза уже есть в базе.');
     const card=newCard(input);s.cards.push(card);return card;
@@ -98,31 +123,31 @@ export function createApp(store:Store) {
     res.json({answer:a.answer,transcript:a.transcript});
   });
   // Bound paid AI requests per workspace, independent of the browser.
-  let aiCalls:number[]=[];
-  app.use('/api/ai',(_req,res,next)=>{aiCalls=aiCalls.filter(t=>Date.now()-t<3600000);if(aiCalls.length>=80){res.status(429).json({error:'Часовой лимит запросов достигнут. Попробуйте позже.'});return;}aiCalls.push(Date.now());next();});
+  const callsByStudent=new Map<string,number[]>();
+  app.use('/api/ai',(_req,res,next)=>{const key=res.locals.studentId as string,aiCalls=(callsByStudent.get(key)||[]).filter(t=>Date.now()-t<3600000);callsByStudent.set(key,aiCalls);if(aiCalls.length>=80){res.status(429).json({error:'Часовой лимит запросов достигнут. Попробуйте позже.'});return;}aiCalls.push(Date.now());next();});
   app.post('/api/ai/cards/:id/examples',async(req,res)=>{
     const card=find(store.read().cards,req.params.id);
-    const raw=await claude(teacherPrompt+' Создай 6 естественных коротких примеров именно с данным словом/фразой и его формами. Верни только JSON-массив [{tense,es,ru}]. Обязательно по одному примеру для ключей: presente, futuro_proximo (только ir a + infinitivo), gerundio_presente (estar + gerundio), perfecto, indefinido, imperfecto. Для существительного меняется время предложения, существительное не спрягай. Для состояний не придумывай неестественное estoy estando: покажи слово в контексте с естественным действием прямо сейчас. Не меняй значение слова, учитывай материалы. Переводи весь пример на русский.',JSON.stringify({es:card.es,ru:card.ru,topic:card.topic,examples:card.examples}));
+    const raw=await claude(studentPrompt()+' Создай 6 естественных коротких примеров именно с данным словом/фразой и его формами. Верни только JSON-массив [{tense,es,ru}]. Обязательно по одному примеру для ключей: presente, futuro_proximo (только ir a + infinitivo), gerundio_presente (estar + gerundio), perfecto, indefinido, imperfecto. Для существительного меняется время предложения, существительное не спрягай. Для состояний не придумывай неестественное estoy estando: покажи слово в контексте с естественным действием прямо сейчас. Не меняй значение слова, учитывай материалы. Переводи весь пример на русский.',JSON.stringify({es:card.es,ru:card.ru,topic:card.topic,examples:card.examples}));
     const examples=z.array(z.object({tense:exampleTense,es:str,ru:str})).length(6).parse(aiJSON(raw));
     if(new Set(examples.map(e=>e.tense)).size!==6)throw new AppError(502,'ИИ не подготовил все шесть времён. Попробуйте ещё раз.');
     store.mutate(s=>{const current=find(s.cards,req.params.id);const saved=new Set(current.examples.map(e=>resolveExampleTense(e.tense)));current.examples.push(...examples.filter(e=>!saved.has(e.tense)));});
     res.json({ok:true});
   });
-  app.post('/api/ai/quick-card',async(req,res)=>{const p=z.object({es:str}).parse(req.body);const raw=await claude(teacherPrompt+' Верни только JSON {es,ru,topic,type,register,source,examples:[{es,ru}]}. type: word/chunk/construction, register: neutral/colloquial/vulgar. source: «Быстрое добавление · Claude».',p.es);res.json(cardInput.parse(aiJSON(raw)));});
-  app.post('/api/ai/verbs',async(req,res)=>{const p=z.object({verb:z.string().trim().min(2).max(70),tense}).parse(req.body);const raw=await claude(teacherPrompt+' Верни только JSON-массив из 6 точных форм: yo, tú, él, nosotros, vosotros, ellos. Для reflexivos добавь местоимение. Без личных местоимений подлежащего. Проверь ударения.',`${p.verb}, ${tenseNames[p.tense]}`);const forms=z.array(str).length(6).parse(aiJSON(raw));store.mutate(s=>{s.verbTables[p.verb]??={};s.verbTables[p.verb][p.tense]=forms;});res.json({forms});});
-  app.post('/api/ai/summary',async(_req,res)=>{const state=store.read();const text=aiReady()?await claude(teacherPrompt+' Напиши краткую сводку к уроку: сделано, проблемы, реальная речь, что взять на урок. Опираться только на данные.',JSON.stringify({summary:localSummary(state),recentAttempts:state.attempts.slice(-100),speech:state.speeches.slice(-5),diary:state.diary.slice(-10),dialogues:state.dialogs.slice(-3)})):localSummary(state);const summary={text,date:new Date().toISOString()};store.mutate(s=>{s.summary=summary;});res.json(summary);});
-  app.post('/api/ai/speech',async(req,res)=>{const p=z.object({mode:str,topic:str,text:z.string().trim().min(10).max(16000),seconds}).parse(req.body);const feedback=await claude(teacherPrompt+' Разбери попытку: что получилось, до 5 ошибок с исправлениями и объяснениями, естественный вариант, одна следующая тренировка. Не присваивай оценку произношению по тексту.',JSON.stringify(p));const record={...p,id:id(),date:new Date().toISOString(),feedback};store.mutate(s=>{s.speeches.push(record);s.attempts.push({id:id(),kind:'speech',at:record.date,correct:null,seconds:p.seconds,topic:p.topic});});res.json(record);});
+  app.post('/api/ai/quick-card',async(req,res)=>{const p=z.object({es:str}).parse(req.body);const raw=await claude(studentPrompt()+' Верни только JSON {es,ru,topic,type,register,source,examples:[{es,ru}]}. type: word/chunk/construction, register: neutral/colloquial/vulgar. source: «Быстрое добавление · Claude».',p.es);res.json(cardInput.parse(aiJSON(raw)));});
+  app.post('/api/ai/verbs',async(req,res)=>{const p=z.object({verb:z.string().trim().min(2).max(70),tense}).parse(req.body);const raw=await claude(studentPrompt()+' Верни только JSON-массив из 6 точных форм: yo, tú, él, nosotros, vosotros, ellos. Для reflexivos добавь местоимение. Без личных местоимений подлежащего. Проверь ударения.',`${p.verb}, ${tenseNames[p.tense]}`);const forms=z.array(str).length(6).parse(aiJSON(raw));store.mutate(s=>{s.verbTables[p.verb]??={};s.verbTables[p.verb][p.tense]=forms;});res.json({forms});});
+  app.post('/api/ai/summary',async(_req,res)=>{const state=store.read();const text=aiReady()?await claude(studentPrompt()+' Напиши краткую сводку к уроку: сделано, проблемы, реальная речь, что взять на урок. Опираться только на данные.',JSON.stringify({summary:localSummary(state),recentAttempts:state.attempts.slice(-100),speech:state.speeches.slice(-5),diary:state.diary.slice(-10),dialogues:state.dialogs.slice(-3)})):localSummary(state);const summary={text,date:new Date().toISOString()};store.mutate(s=>{s.summary=summary;});res.json(summary);});
+  app.post('/api/ai/speech',async(req,res)=>{const p=z.object({mode:str,topic:str,text:z.string().trim().min(10).max(16000),seconds}).parse(req.body);const feedback=await claude(studentPrompt()+' Разбери попытку: что получилось, до 5 ошибок с исправлениями и объяснениями, естественный вариант, одна следующая тренировка. Не присваивай оценку произношению по тексту.',JSON.stringify(p));const record={...p,id:id(),date:new Date().toISOString(),feedback};store.mutate(s=>{s.speeches.push(record);s.attempts.push({id:id(),kind:'speech',at:record.date,correct:null,seconds:p.seconds,topic:p.topic});});res.json(record);});
   app.post('/api/ai/dialog',async(req,res)=>{
     const p=z.object({id:z.string().optional(),topic:str,focus:str,text:z.string().max(6000),seconds}).parse(req.body);
     const previous=p.id?find(store.read().dialogs,p.id):null;
     if(previous&&previous.messages.length>=80)throw new AppError(400,'Диалог завершён. Начните новый разговор.');
     if(previous&&!p.text.trim())throw new AppError(400,'Напишите реплику.');
     const messages=[...(previous?.messages||[]),{role:'user' as const,content:p.text||'Начни диалог: короткая реплика на испанском и один вопрос.'}];
-    const response=await claude(teacherPrompt+` Ты собеседник. Тема: ${p.topic}. Упор: ${p.focus}. Говори по-испански 1–3 предложения, при ошибке добавь короткое исправление на русском. Всегда оставляй место для ответа.`,messages);
+    const response=await claude(studentPrompt()+` Ты собеседник. Тема: ${p.topic}. Упор: ${p.focus}. Говори по-испански 1–3 предложения, при ошибке добавь короткое исправление на русском. Всегда оставляй место для ответа.`,messages);
     const d={id:previous?.id||id(),date:previous?.date||new Date().toISOString(),topic:p.topic,focus:p.focus,messages:[...messages,{role:'assistant' as const,content:response}]};
     store.mutate(s=>{if(previous){const current=find(s.dialogs,previous.id);if(current.messages.length!==previous.messages.length)throw new AppError(409,'Диалог изменён в другом окне. Обновите страницу.');current.messages=d.messages;}else s.dialogs.push(d);if(p.text)s.attempts.push({id:id(),kind:'speech',at:new Date().toISOString(),correct:null,seconds:p.seconds,topic:p.topic});});res.json(d);
   });
-  app.post('/api/ai/listening',async(req,res)=>{const p=z.object({audioId:str,answer:str,seconds}).parse(req.body);const a=find(store.read().audios,p.audioId);const feedback=await claude(teacherPrompt+' Дай обратную связь на открытый вопрос по аудио. Объясни смысл, что ученик понял и что упустил. Не используй бинарную отметку верно/неверно.',JSON.stringify({text:a.transcript,question:a.question,reference:a.answer,answer:p.answer}));store.mutate(s=>s.attempts.push({id:id(),kind:'listening',at:new Date().toISOString(),correct:null,seconds:p.seconds,topic:a.topic,answer:p.answer}));res.json({feedback,transcript:a.transcript,reference:a.answer});});
+  app.post('/api/ai/listening',async(req,res)=>{const p=z.object({audioId:str,answer:str,seconds}).parse(req.body);const a=find(store.read().audios,p.audioId);const feedback=await claude(studentPrompt()+' Дай обратную связь на открытый вопрос по аудио. Объясни смысл, что ученик понял и что упустил. Не используй бинарную отметку верно/неверно.',JSON.stringify({text:a.transcript,question:a.question,reference:a.answer,answer:p.answer}));store.mutate(s=>s.attempts.push({id:id(),kind:'listening',at:new Date().toISOString(),correct:null,seconds:p.seconds,topic:a.topic,answer:p.answer}));res.json({feedback,transcript:a.transcript,reference:a.answer});});
   app.post('/api/import/pdf',express.raw({type:'application/pdf',limit:'15mb'}),async(req,res)=>{
     if(!Buffer.isBuffer(req.body))throw new AppError(400,'Выберите PDF-файл до 15 МБ.');
     res.json(await extractPdf(req.body));
@@ -148,7 +173,7 @@ export function createApp(store:Store) {
     });
     res.json({added,duplicates:input.cards.length-added});
   });
-  app.post('/api/ai/document',async(req,res)=>{const p=z.object({text:z.string().trim().min(30).max(35000),source:str}).parse(req.body);const raw=await claude(teacherPrompt+' Разбери фрагмент урока. Верни только JSON {title,transcript,cards:[{es,ru,type,topic,register,source,examples:[{es,ru,tense}]}],topics:[строки],assignments:[строки]}. Сохраняй транскрипцию целиком, источник и регистр. Добавь примеры к словам без примеров. Ключи к упражнениям не добавляй в открытые формулировки заданий. Строка таблицы — карточка; конструкции с пропуском — construction, фразы — chunk. Не придумывай содержание исходного документа.',JSON.stringify(p));res.json(documentSchema.parse(aiJSON(raw)));});
+  app.post('/api/ai/document',async(req,res)=>{const p=z.object({text:z.string().trim().min(30).max(35000),source:str}).parse(req.body);const raw=await claude(studentPrompt()+' Разбери фрагмент урока. Верни только JSON {title,transcript,cards:[{es,ru,type,topic,register,source,examples:[{es,ru,tense}]}],topics:[строки],assignments:[строки]}. Сохраняй транскрипцию целиком, источник и регистр. Добавь примеры к словам без примеров. Ключи к упражнениям не добавляй в открытые формулировки заданий. Строка таблицы — карточка; конструкции с пропуском — construction, фразы — chunk. Не придумывай содержание исходного документа.',JSON.stringify(p));res.json(documentSchema.parse(aiJSON(raw)));});
   app.post('/api/import/confirm',(req,res)=>{const p=documentSchema.parse(req.body);let added=0;store.mutate(s=>{const keys=new Set(s.cards.map(c=>normalize(c.es)));for(const c of p.cards){if(!keys.has(normalize(c.es))){s.cards.push(newCard(c));keys.add(normalize(c.es));added++;}}s.plan.topics=[...new Set([...s.plan.topics,...p.topics])];s.lessons.push({id:id(),date:new Date().toISOString().slice(0,10),title:p.title,status:'planned',note:'Материал из PDF · подтверждено преподавателем',text:p.transcript});for(const title of p.assignments)s.assignments.push({id:id(),title,due:new Date(Date.now()+7*86400000).toISOString().slice(0,10),done:false});});res.json({added,duplicates:p.cards.length-added});});
   app.use('/api',(_req,res)=>res.status(404).json({error:'Такого действия нет.'}));
   app.use((err:unknown,_req:express.Request,res:express.Response,_next:express.NextFunction)=>{

@@ -1,6 +1,7 @@
 import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
 import { X, ArrowUpRight, LoaderCircle, Volume2, Snail } from 'lucide-react';
 import { speak } from './api';
+import {useApp} from './context';
 export function Modal({title,children,close,wide=false}:{title:string;children:ReactNode;close:()=>void;wide?:boolean}){
   const heading=useId();const ref=useRef<HTMLDivElement>(null);
   useEffect(()=>{const before=document.activeElement as HTMLElement;const el=ref.current;const focus=()=>el?.querySelector<HTMLElement>('input,textarea,select,button')?.focus();focus();const onKey=(e:KeyboardEvent)=>{if(e.key==='Escape')close();if(e.key==='Tab'&&el){const focusable=[...el.querySelectorAll<HTMLElement>('button,input,textarea,select,a[href]')].filter(e=>!e.hasAttribute('disabled'));const first=focusable[0],last=focusable.at(-1);if(e.shiftKey&&document.activeElement===first){e.preventDefault();last?.focus();}else if(!e.shiftKey&&document.activeElement===last){e.preventDefault();first?.focus();}}};document.addEventListener('keydown',onKey);const overflow=document.body.style.overflow;document.body.style.overflow='hidden';return()=>{document.removeEventListener('keydown',onKey);document.body.style.overflow=overflow;before?.focus();};},[close]);
@@ -17,7 +18,8 @@ export function Field({label,children}:{label:string;children:ReactNode}){return
 export function Sound({text,notify}:{text:string;notify:(s:string)=>void}){return <span className="sound-buttons"><button title="Обычная озвучка" aria-label="Озвучить по-испански" className="icon-btn" onClick={()=>{try{speak(text);}catch(e){notify((e as Error).message);}}}><Volume2 size={21}/></button><button title="Медленная озвучка" aria-label="Озвучить медленно" className="icon-btn" onClick={()=>{try{speak(text,true);}catch(e){notify((e as Error).message);}}}><Snail size={20}/></button></span>;}
 export function TextArrow({children,onClick}:{children:ReactNode;onClick:()=>void}){return <button className="text-link" onClick={onClick}>{children}<ArrowUpRight size={16}/></button>;}
 export function useDraft(key:string,initial=''){
-  const [value,setValue]=useState(()=>{try{return localStorage.getItem('mi:'+key)||initial;}catch{return initial;}});
-  useEffect(()=>{try{localStorage.setItem('mi:'+key,value);}catch{/* storage unavailable */}},[key,value]);
+  const {meta}=useApp();const scoped='mi:draft:'+meta.role+':'+meta.student.id+':'+key;
+  const [value,setValue]=useState(()=>{try{return sessionStorage.getItem(scoped)||initial;}catch{return initial;}});
+  useEffect(()=>{try{sessionStorage.setItem(scoped,value);}catch{/* storage unavailable */}},[scoped,value]);
   return [value,setValue] as const;
 }

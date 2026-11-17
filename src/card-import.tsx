@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react';
 import { Check, FileText, Upload, X } from 'lucide-react';
-import { api } from './api';
+
 import { useApp } from './context';
 import { Badge, Button, Field, Modal } from './ui';
 
@@ -8,7 +8,7 @@ interface Pair { es: string; ru: string; line: number }
 interface Preview { cards: Pair[]; issues: { line: number; text: string; reason: string }[] }
 
 export function CardImportModal({ close }: { close: () => void }) {
-  const { state, refresh, notify } = useApp();
+  const {api,uploadPdf, state, refresh, notify }=useApp();
   const [text, setText] = useState('');
   const [source, setSource] = useState('Список карточек');
   const [topic, setTopic] = useState('Повседневное');
@@ -34,9 +34,7 @@ export function CardImportModal({ close }: { close: () => void }) {
     if (file.size > 15 * 1024 * 1024) { setError('Файл больше 15 МБ. Разделите PDF на части.'); return; }
     setBusy(true); setError(''); setDone(null); setPreview(null);
     try {
-      const response = await fetch('/api/import/pdf', { method: 'POST', headers: { 'Content-Type': 'application/pdf' }, body: file });
-      const result = await response.json();
-      if (!response.ok) throw new Error(result.error);
+      const result = await uploadPdf(file);
       setSource(file.name); setText(result.text);
       if (result.text.length > 200000) throw new Error('В файле слишком много текста. Разделите PDF или оставьте в поле часть списка до 200 000 символов.');
       await parse(result.text);

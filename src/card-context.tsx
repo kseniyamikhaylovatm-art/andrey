@@ -1,6 +1,6 @@
 import {useEffect,useId,useState} from 'react';
 import {BookOpen,ChevronLeft,ChevronRight,PenLine,Sparkles} from 'lucide-react';
-import {api,speak} from './api';
+import {speak} from './api';
 import {useApp} from './context';
 import {exampleTenseNames,exampleTenseDescriptions,type Card,type CardContextData,type Example,type ExampleTense} from './types';
 import {Badge,Button,Empty,Field,Modal,Panel,Sound} from './ui';
@@ -9,7 +9,7 @@ const tenses=Object.keys(exampleTenseNames) as ExampleTense[];
 const people=['yo','tú','él / ella','nosotros','vosotros','ellos / ellas'];
 
 export function CardContext({card,revealed}:{card:Card;revealed:boolean}){
-  const {state,meta,run,notify}=useApp();
+  const {api,state,meta,run,notify}=useApp();
   const [selected,setSelected]=useState<ExampleTense>('presente');
   const [data,setData]=useState<CardContextData|null>(null);
   const [loading,setLoading]=useState(false),[error,setError]=useState(''),[editing,setEditing]=useState(false),[generating,setGenerating]=useState(false);
@@ -41,11 +41,11 @@ export function CardContext({card,revealed}:{card:Card;revealed:boolean}){
             <div className="tense-sentence"><p lang="es">{example.es}</p><Sound text={example.es} notify={notify}/></div>
             <p className="tense-translation">{example.ru}</p>
             <small>{example.origin==='library'?'Стартовый учебный пример':'Пример из карточки'}</small>
-          </div>):<Empty>Для «{card.es}» пока нет примера в этом времени. Добавьте предложение с переводом — оно сохранится в этой вкладке.</Empty>}
+          </div>):<Empty>Для «{card.es}» пока нет примера в этом времени. Преподаватель может добавить предложение с переводом в эту вкладку.</Empty>}
           {data?.forms[selected]&&<div className="tense-forms-section"><div className="eyebrow">{data.verb} · ФОРМЫ ДЛЯ ПОВТОРЕНИЯ</div><div className="tense-forms">{data.forms[selected]!.map((form,i)=><button key={i} title="Нажмите, чтобы послушать" aria-label={'Озвучить '+people[i]+': '+form} onClick={()=>{try{speak(form);}catch(e){notify((e as Error).message);}}}><small>{people[i]}</small><strong lang="es">{form}</strong></button>)}</div><p className="small muted">Нажмите на форму, чтобы послушать её.</p></div>}
           {data?.formNotes[selected]&&<p className="small muted">{data.formNotes[selected]}</p>}
           {!data?.verb&&active.length>0&&<p className="small muted">Время меняется в предложении. Само существительное не спрягается, а готовая фраза используется в контексте.</p>}
-          <div className="panel-bottom"><button className="text-link" onClick={()=>setEditing(true)}><PenLine size={15}/>{active.length?'Исправить или добавить свой пример':'Добавить пример'}</button>{meta.ai&&<Button secondary disabled={generating} onClick={async()=>{setGenerating(true);await run(()=>api('/ai/cards/'+card.id+'/examples',{}),'Примеры добавлены. Проверьте их перед занятием.');setGenerating(false);}}><Sparkles size={15}/>{generating?'Готовим примеры…':'Дополнить с ИИ'}</Button>}</div>
+          <div className="panel-bottom">{meta.role==='teacher'&&<button className="text-link" onClick={()=>setEditing(true)}><PenLine size={15}/>{active.length?'Исправить или добавить свой пример':'Добавить пример'}</button>}{meta.role==='teacher'&&meta.ai&&<Button secondary disabled={generating} onClick={async()=>{setGenerating(true);await run(()=>api('/ai/cards/'+card.id+'/examples',{}),'Примеры добавлены. Проверьте их перед занятием.');setGenerating(false);}}><Sparkles size={15}/>{generating?'Готовим примеры…':'Дополнить с ИИ'}</Button>}</div>
         </>}
       </div>
       {!!data?.originalExamples.length&&<details className="context-materials"><summary>Примеры из материалов · {card.source}</summary>{data.originalExamples.map((example,i)=><div className="material-example" key={i}><p lang="es">{example.es}<Sound text={example.es} notify={notify}/></p><p className="muted">{example.ru}</p>{example.tense&&<small>{example.tense}</small>}</div>)}</details>}
@@ -55,7 +55,7 @@ export function CardContext({card,revealed}:{card:Card;revealed:boolean}){
 }
 
 function TenseExampleEditor({card,tense,example,close}:{card:Card;tense:ExampleTense;example?:Example;close:()=>void}){
-  const {run}=useApp();const [es,setEs]=useState(example?.es||''),[ru,setRu]=useState(example?.ru||''),[busy,setBusy]=useState(false);
+  const {api,run}=useApp();const [es,setEs]=useState(example?.es||''),[ru,setRu]=useState(example?.ru||''),[busy,setBusy]=useState(false);
   return <Modal title={card.es+' · '+exampleTenseNames[tense]} close={close}><form className="form" onSubmit={async e=>{
     e.preventDefault();setBusy(true);const result=await run(()=>api('/cards/'+card.id+'/tense-example',{tense,es,ru},'PUT'),'Пример сохранён');setBusy(false);if(result)close();
   }}><p className="small muted">Добавьте пример из своего урока. Он заменит стартовый пример только в выбранной вкладке.</p><Field label="Пример на испанском"><textarea lang="es" rows={3} value={es} onChange={e=>setEs(e.target.value)} required maxLength={4000}/></Field><Field label="Перевод примера"><textarea rows={3} value={ru} onChange={e=>setRu(e.target.value)} required maxLength={4000}/></Field><Button type="submit" disabled={busy||!es.trim()||!ru.trim()}>{busy?'Сохраняем…':'Сохранить пример'}</Button></form></Modal>;

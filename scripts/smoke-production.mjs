@@ -8,7 +8,7 @@ const dir=mkdtempSync(join(tmpdir(),'mi-espanol-production-'));
 const code=randomBytes(20).toString('hex');
 const port=process.env.SMOKE_PORT||'3201';
 const base=`http://127.0.0.1:${port}`;
-const env={...process.env,NODE_ENV:'production',APP_ACCESS_CODE:code,SESSION_SECRET:randomBytes(32).toString('hex'),DATA_DIR:dir,PORT:port,HOST:'127.0.0.1',DEMO_MODE:'true'};
+const env={...process.env,NODE_ENV:'production',TEACHER_ACCESS_CODE:code,APP_ACCESS_CODE:randomBytes(20).toString('hex'),SESSION_SECRET:randomBytes(32).toString('hex'),DATA_DIR:dir,PORT:port,HOST:'127.0.0.1',DEMO_MODE:'true'};
 let processHandle;
 async function start(){
  processHandle=spawn(process.execPath,['--import','tsx','server/index.ts'],{env,stdio:['ignore','ignore','pipe']});
@@ -28,8 +28,13 @@ try{
  const login=await fetch(base+'/api/login',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({code})});assert.equal(login.status,200);
  const cookieHeader=login.headers.get('set-cookie');assert.match(cookieHeader,/HttpOnly/);assert.match(cookieHeader,/Secure/);
  const cookie=cookieHeader.split(';')[0];
+ const created=await fetch(base+'/api/students',{method:'POST',headers:{'content-type':'application/json',cookie},body:JSON.stringify({name:'Production student',level:'B1'})});assert.equal(created.status,201);const student=await created.json();
+ const learnerLogin=await fetch(base+'/api/login',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({code:student.code})});assert.equal(learnerLogin.status,200);const studentCookie=learnerLogin.headers.get('set-cookie').split(';')[0];
+ assert.equal((await fetch(base+'/api/students',{headers:{cookie:studentCookie}})).status,403);
  const lesson=await fetch(base+'/api/lessons',{method:'POST',headers:{'content-type':'application/json',cookie},body:JSON.stringify({date:'2026-11-03',title:'Production restart check',note:'',status:'planned'})});assert.equal(lesson.status,200);
  await stop();await start();
  const response=await fetch(base+'/api/state',{headers:{cookie}});assert.equal(response.status,200);const result=await response.json();assert.equal(result.state.lessons[0].title,'Production restart check');assert.equal(result.meta.demo,true);
- console.log('Production OK: built interface, protected API, secure session, persisted lesson after restart.');
+ const own=await (await fetch(base+'/api/state',{headers:{cookie:studentCookie}})).json();assert.equal(own.meta.student.id,student.student.id);assert.equal(own.state.lessons.length,0);
+ const afterRestart=await fetch(base+'/api/login',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({code:student.code})});assert.equal(afterRestart.status,200);
+ console.log('Production OK: built interface, protected roles, secure sessions, isolated student data and generated codes persist after restart.');
 }finally{await stop();rmSync(dir,{recursive:true});}

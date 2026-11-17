@@ -1,13 +1,13 @@
 import {useState} from 'react';
 import {ArrowRight,BookOpen,CalendarDays,CheckCircle2,Headphones,Layers,MessageCircle,Mic,Plus,Target} from 'lucide-react';
-import {api,formatDate,percentage} from './api';
+import {formatDate,percentage} from './api';
 import {useApp} from './context';
 import {studyStats,madridDay} from './study-stats';
 import {Badge,Button,Empty,Field,Panel,SectionTitle,TextArrow} from './ui';
 
 interface Actions {editPlan:()=>void;addDiary:()=>void;addCard:()=>void;importCards:()=>void}
 export function StudyDashboard({editPlan,addDiary,addCard,importCards}:Actions){
-  const {state:s,meta,go,run,notify}=useApp();
+  const {api,state:s,meta,go,run,notify}=useApp();
   const stats=studyStats(s),[phrase,setPhrase]=useState(''),[saving,setSaving]=useState(false);
   const practiceMode=stats.due?'review':stats.fresh?'new':'all';
   const active=s.cards.filter(c=>c.enabled).length;
@@ -58,9 +58,9 @@ export function StudyDashboard({editPlan,addDiary,addCard,importCards}:Actions){
           return api<{added:number;duplicates:number}>('/import/cards/confirm',{cards:parsed.cards,topic:'Повседневное',source:'Добавлено с главной страницы'});
         });
         setSaving(false);if(result){setPhrase('');notify(result.added?'Карточка добавлена':'Такая карточка уже есть в базе.');}
-      }}><Field label="Слово и перевод"><input value={phrase} onChange={e=>setPhrase(e.target.value)} placeholder="el barrio — район" required maxLength={8000}/></Field><Button type="submit" disabled={saving||!phrase.trim()}>{saving?'Добавляем…':'Добавить'}</Button></form><div className="study-import-actions"><TextArrow onClick={importCards}>Загрузить PDF карточек</TextArrow><TextArrow onClick={addCard}>Карточка с примерами</TextArrow></div></Panel>
+      }}><Field label="Слово и перевод"><input value={phrase} onChange={e=>setPhrase(e.target.value)} placeholder="el barrio — район" required maxLength={8000}/></Field><Button type="submit" disabled={saving||!phrase.trim()}>{saving?'Добавляем…':'Добавить'}</Button></form><div className="study-import-actions"><TextArrow onClick={importCards}>Загрузить PDF карточек</TextArrow>{meta.role==='teacher'&&<TextArrow onClick={addCard}>Карточка с примерами</TextArrow>}</div></Panel>
       <Panel><div className="section-heading"><h2>Темы для повторения</h2><BookOpen size={21}/></div>{s.plan.topics.map(topic=>{const cards=s.cards.filter(c=>c.enabled&&c.topic===topic),learned=cards.filter(c=>c.stage>=4).length;return <div className="study-topic-row" key={topic}><div><strong>{topic}</strong><small>{learned} из {cards.length} выучено</small><div className="progress-track"><span style={{width:percentage(learned,cards.length)+'%'}}/></div></div><Button secondary disabled={!cards.length} onClick={()=>go('cards',{topic,mode:'all'})}>Тренировать</Button></div>;})}</Panel>
     </div>
-    <Panel className="study-course-plan"><div className="section-heading"><h2>План обучения</h2><TextArrow onClick={editPlan}>Изменить план</TextArrow></div><div className="study-course-details"><span><strong>Цель курса:</strong> {s.plan.goal}</span><span><strong>Уровень:</strong> {s.plan.level}</span><span><strong>Проведено занятий:</strong> {held}</span></div><div className="goals-table"><div className="goals-row goals-head"><span>Навык</span><span>Сейчас</span><span>Цель</span></div>{s.plan.goals.map((goal,i)=><div className="goals-row" key={i}><strong>{goal.skill}</strong><span>{goal.now}</span><span>{goal.target}</span></div>)}</div><div className="study-criteria"><h3>Критерии результата</h3><ul className="criteria">{s.plan.criteria.map((criterion,i)=><li key={i}><CheckCircle2 size={18}/><span>{criterion}</span></li>)}</ul></div><Button secondary onClick={()=>go('verbs')}><Target size={19}/>Тренажёр глаголов</Button></Panel>
+    <Panel className="study-course-plan"><div className="section-heading"><h2>План обучения</h2>{meta.role==='teacher'&&<TextArrow onClick={editPlan}>Изменить план</TextArrow>}</div><div className="study-course-details"><span><strong>Цель курса:</strong> {s.plan.goal}</span><span><strong>Уровень:</strong> {s.plan.level}</span><span><strong>Проведено занятий:</strong> {held}</span></div><div className="goals-table"><div className="goals-row goals-head"><span>Навык</span><span>Сейчас</span><span>Цель</span></div>{s.plan.goals.map((goal,i)=><div className="goals-row" key={i}><strong>{goal.skill}</strong><span>{goal.now}</span><span>{goal.target}</span></div>)}</div><div className="study-criteria"><h3>Критерии результата</h3><ul className="criteria">{s.plan.criteria.map((criterion,i)=><li key={i}><CheckCircle2 size={18}/><span>{criterion}</span></li>)}</ul></div><Button secondary onClick={()=>go('verbs')}><Target size={19}/>Тренажёр глаголов</Button></Panel>
   </>;
 }

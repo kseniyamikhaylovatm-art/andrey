@@ -50,3 +50,6 @@ export interface AppState {
   plan: Plan; verbTables: Record<string, Partial<Record<Tense, string[]>>>;
   summary: { text: string; date: string } | null;
 }
+export interface StudentProfile {id:string;name:string;createdAt:string;level:string;cards:number;attempts:number;lastPractice:string|null}
+export interface AccessSession {authenticated:boolean;protected:boolean;teacherConfigured:boolean;demo?:boolean;role?:'teacher'|'student';studentId?:string}
+export interface WorkspaceMeta {ai:boolean;protected:boolean;verbs:string[];demo?:boolean;role:'teacher'|'student';student:StudentProfile}

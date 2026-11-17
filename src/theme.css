@@ -419,4 +419,28 @@ th { color: #89724b; }
 .study-criteria h3{font-size:25px;margin-bottom:12px}
 @media(max-width:1050px){.study-start-panel,.study-overview{padding:26px}.study-start-actions{flex-direction:column;align-items:stretch;width:100%}.study-start-actions .button{justify-content:flex-start}.study-queue-counts span{display:block;margin:5px 0 0}.study-week-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.study-skill-grid{gap:16px}.study-skill-grid>.panel{padding:24px 21px}.study-skill-grid .button{font-size:15px}.study-work-grid{grid-template-columns:1fr!important}}
 @media(max-width:700px){.study-top-grid,.study-skill-grid{grid-template-columns:1fr;gap:18px}.study-start-panel,.study-overview{padding:25px 23px}.study-start-panel h2{font-size:29px}.study-queue-counts{font-size:17px;margin-bottom:20px}.study-start-actions .button{font-size:16px;min-height:49px}.study-start-detail{font-size:14px}.study-numbers{gap:24px;margin-bottom:24px}.study-numbers strong{font-size:40px}.study-numbers span{font-size:15px}.study-status-legend{font-size:13px;gap:9px 15px}.study-skill-grid p{font-size:16px}.study-week-grid{gap:20px 16px}.study-week-grid>div{align-items:flex-start;flex-direction:column;gap:7px}.study-week-grid span{font-size:14px}.study-week-grid strong{font-size:31px}.study-add-form{flex-direction:column;align-items:stretch}.study-add-form .field{width:100%}.study-add-form .button{align-self:flex-start!important}.study-topic-row{gap:12px}.study-topic-row strong{font-size:15px}.study-topic-row .button{font-size:13px;padding:8px 11px}.study-course-plan .goals-row{grid-template-columns:1fr 1fr}.study-course-details{font-size:15px}.study-course-plan .section-heading{gap:13px}.study-course-plan .section-heading h2{font-size:25px}}
+.roster-content{padding-top:42px}
+.roster-toolbar{display:flex;align-items:center;justify-content:space-between;gap:24px;margin-bottom:25px;padding:22px 28px}
+.roster-toolbar>div{display:flex;align-items:center;gap:13px;color:var(--navy)}
+.roster-toolbar .field{width:310px;max-width:100%}
+.roster-search{position:relative;display:flex;align-items:center}
+.roster-search svg{position:absolute;left:13px;color:#9c8058}
+.roster-search input{padding-left:42px!important;width:100%}
+.student-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:24px}
+.student-card{display:flex;flex-direction:column;align-items:flex-start;min-width:0}
+.student-card .section-heading{width:100%;align-items:flex-start;margin-bottom:20px}
+.student-card h2{font-size:30px;line-height:1.3;overflow-wrap:anywhere}
+.student-card dl{width:100%;margin:0 0 26px;display:flex;flex-direction:column;gap:13px;flex:1}
+.student-card dl>div{display:flex;justify-content:space-between;gap:20px;font-size:15px;line-height:1.6}
+.student-card dt{color:#776a57}
+.student-card dd{margin:0;color:var(--navy);font-weight:500;text-align:right}
+.student-card-tools{display:flex;justify-content:space-between;gap:14px;flex-wrap:wrap;width:100%;border-top:1px solid #e5d6bc;padding-top:20px;margin-top:24px}
+.student-card-tools .text-link{font-size:14px}
+.issued-code{padding:23px;background:#f4ebdb;border:1px solid #d8bb8b;border-radius:14px;margin:22px 0;display:flex;flex-direction:column;gap:20px;align-items:flex-start}
+.issued-code code{font-size:24px;line-height:1.5;overflow-wrap:anywhere;user-select:all;color:var(--navy)}
+.login-help{font-size:15px!important;max-width:430px;line-height:1.7;margin-top:25px!important}
+.login-screen>.brand-monogram{margin:0 auto 20px}
+@media(max-width:1150px){.student-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.masthead-actions{gap:10px}.masthead-actions .students-link{font-size:13px;padding:9px 12px}}
+@media(max-width:700px){.student-grid{grid-template-columns:1fr;gap:18px}.roster-toolbar{flex-direction:column;align-items:stretch;padding:23px}.roster-toolbar .field{width:100%}.roster-content{padding-top:28px}.student-card .button{font-size:16px}.issued-code code{font-size:20px}.masthead-actions .students-link{display:none}}
+@media(max-width:700px){.teacher-roster-header .masthead-actions>.icon-btn{display:inline-flex}}
 @media(prefers-reduced-motion:reduce) { .primary-nav a { transition: none; } }
