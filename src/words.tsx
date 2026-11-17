@@ -4,7 +4,7 @@ import {useApp} from './context';
 import {today,speak} from './api';
 import {readRoute} from './navigation';
 import {lessonCards,lessonDate} from './lesson-vocabulary';
-import type {Card,LessonWordResult} from './types';
+import type {Card,Example,LessonWordResult} from './types';
 import {CardEditor} from './cards';
 import {lessonList} from './lesson-list';
 import {parseCardPairs} from './card-pairs';
@@ -13,7 +13,7 @@ import {Badge,Button,Empty,Field,Panel,SectionTitle,Sound} from './ui';
 export function WordsPage(){
   const {state:s,meta,api,run,notify,go,refresh}=useApp(),teacher=meta.role==='teacher';
   const [selectedId,setSelectedId]=useState(()=>readRoute().params.get('lesson')||''),[date,setDate]=useState(today);
-  const [text,setText]=useState(''),[title,setTitle]=useState(''),[topic,setTopic]=useState('Повседневное'),[busy,setBusy]=useState(false),[translations,setTranslations]=useState(true),[editing,setEditing]=useState<Card|null>(null);
+  const [text,setText]=useState(''),[title,setTitle]=useState(''),[topic,setTopic]=useState('Повседневное'),[busy,setBusy]=useState(false),[translations,setTranslations]=useState(false),[editing,setEditing]=useState<Card|null>(null);
   const input=useRef<HTMLInputElement>(null),listInput=useRef<HTMLTextAreaElement>(null);
   const [listMode,setListMode]=useState(false),[progress,setProgress]=useState('');
   const allLessons=s.lessons.slice().sort((a,b)=>b.date.localeCompare(a.date));
@@ -21,7 +21,7 @@ export function WordsPage(){
   const lesson=lessons.find(item=>item.id===selectedId)||lessons.find(item=>teacher?item.date===date:true);
   const words=lessonCards(s.cards,lesson),enabled=words.filter(card=>card.enabled).length;
   const index=lessons.findIndex(item=>item.id===lesson?.id);
-  function select(id:string){const item=s.lessons.find(lesson=>lesson.id===id);setSelectedId(id);if(item)setDate(item.date);setTranslations(true);}
+  function select(id:string){const item=s.lessons.find(lesson=>lesson.id===id);setSelectedId(id);if(item)setDate(item.date);setTranslations(false);}
   // Keep the student's open lesson list up to date while the teacher adds words.
   useEffect(()=>{if(teacher)return;const timer=setInterval(()=>{if(document.visibilityState==='visible')void refresh().catch(()=>{});},8000);return()=>clearInterval(timer);},[teacher,refresh]);
   return <><SectionTitle eyebrow="" title="Слова" description="Записи с уроков по датам. Все слова связаны с «Автоматизацией»."/>
@@ -69,6 +69,9 @@ export function WordsPage(){
 }
 
 function WordRow({card,date,number,translations,edit,remove}:{card:Card;date:string;number:number;translations:boolean;edit:()=>void;remove:()=>Promise<void>}){
-  const {meta,api,run,notify}=useApp(),[open,setOpen]=useState(false),[removing,setRemoving]=useState(false);
-  return <article className={'lesson-word-row '+(!card.enabled?'word-disabled':'')}><div className="lesson-word-top"><button className="lesson-word-reveal" aria-expanded={open} onClick={()=>setOpen(!open)}><span>{number}</span><strong lang="es">{card.es}</strong></button><div className="lesson-word-actions"><button className="icon-btn" aria-label={'Озвучить '+card.es} onClick={()=>{try{speak(card.es);}catch(error){notify((error as Error).message);}}}><Volume2 size={19}/></button><button className={'star-button '+(card.focused?'selected':'')} aria-label={'В фокус: '+card.es} aria-pressed={card.focused} onClick={()=>void run(()=>api('/cards/'+card.id,{focused:!card.focused},'PATCH'))}><Star size={19} fill={card.focused?'currentColor':'none'}/></button>{meta.role==='teacher'&&<button className="icon-btn" aria-label={'Редактировать '+card.es} onClick={edit}><PenLine size={17}/></button>}</div></div><small className="word-record-date">{lessonDate(date)}</small>{!card.enabled&&<small className="word-disabled-note">Выключено в тренажёре</small>}{(open||translations)&&<div className="lesson-word-translation"><p>{card.ru}</p>{open&&<>{card.examples.slice(0,2).map((example,index)=><div className="lesson-word-example" key={index}><p lang="es">{example.es}</p><p className="muted">{example.ru}</p></div>)}<div className="lesson-word-details"><Sound text={card.es} notify={notify}/>{meta.role==='teacher'&&<><label className="check-label"><input type="checkbox" checked={card.enabled} onChange={event=>void run(()=>api('/cards/'+card.id,{enabled:event.target.checked},'PATCH'))}/>В тренажёре</label><button className="text-link" disabled={removing} onClick={async()=>{setRemoving(true);await remove();setRemoving(false);}}>Убрать из урока</button></>}</div></>}</div>}</article>;
+  const {meta,api,run,notify,refresh}=useApp(),[open,setOpen]=useState(false),[removing,setRemoving]=useState(false),[loading,setLoading]=useState(false),[error,setError]=useState('');
+  const examples=card.examples.filter(example=>!example.level||example.level===meta.student.level);
+  async function reveal(){setOpen(!open);if(open||loading||examples.length||!meta.ai)return;setLoading(true);setError('');try{await api<Example>('/ai/cards/'+card.id+'/word-example',{});await refresh();}catch(problem){setError((problem as Error).message);}finally{setLoading(false);}}
+
+  return <article className={'lesson-word-row '+(!card.enabled?'word-disabled':'')}><div className="lesson-word-top"><button className="lesson-word-reveal" aria-expanded={open} onClick={()=>void reveal()}><span>{number}</span><strong lang="es">{card.es}</strong></button><div className="lesson-word-actions"><button className="icon-btn" aria-label={'Озвучить '+card.es} onClick={()=>{try{speak(card.es);}catch(error){notify((error as Error).message);}}}><Volume2 size={19}/></button><button className={'star-button '+(card.focused?'selected':'')} aria-label={'В фокус: '+card.es} aria-pressed={card.focused} onClick={()=>void run(()=>api('/cards/'+card.id,{focused:!card.focused},'PATCH'))}><Star size={19} fill={card.focused?'currentColor':'none'}/></button>{meta.role==='teacher'&&<button className="icon-btn" aria-label={'Редактировать '+card.es} onClick={edit}><PenLine size={17}/></button>}</div></div>{!card.enabled&&<small className="word-disabled-note">Выключено в тренажёре</small>}{(open||translations)&&<div className="lesson-word-translation"><p>{card.ru}</p>{open&&<>{loading&&<p role="status">Готовим пример для уровня {meta.student.level}…</p>}{error&&<p role="alert">{error}</p>}{!loading&&!error&&!examples.length&&<p className="small muted">{meta.ai?'Закройте и откройте слово, чтобы подготовить пример.':'Пример пока не добавлен. После подключения ИИ он появится при открытии слова.'}</p>}{examples.slice(0,2).map((example,index)=><div className="lesson-word-example" key={index}><p lang="es">{example.es}<Sound text={example.es} notify={notify}/></p><p className="muted">{example.ru}</p></div>)}<div className="lesson-word-details"><Sound text={card.es} notify={notify}/>{meta.role==='teacher'&&<><label className="check-label"><input type="checkbox" checked={card.enabled} onChange={event=>void run(()=>api('/cards/'+card.id,{enabled:event.target.checked},'PATCH'))}/>В тренажёре</label><button className="text-link" disabled={removing} onClick={async()=>{setRemoving(true);await remove();setRemoving(false);}}>Убрать из урока</button></>}</div></>}</div>}</article>;
 }

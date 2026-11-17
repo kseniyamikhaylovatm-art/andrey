@@ -20,7 +20,7 @@ export const exampleTenseDescriptions: Record<ExampleTense,string> = {
   gerundio_presente: 'Действие прямо сейчас · estar + герундий', perfecto: 'Прошедшее, связанное с настоящим',
   indefinido: 'Завершённое действие в прошлом', imperfecto: 'Привычка или фон в прошлом',
 };
-export interface Example { es: string; ru: string; tense?: string }
+export interface Example { es: string; ru: string; tense?: string; level?: string }
 export interface CardContextData {
   verb: string | null;
   examples: (Example & {tense: ExampleTense; origin: 'card' | 'library'})[];

@@ -63,7 +63,7 @@ test('Spanish-only input is translated, saved in the dated list and visible with
  const result=await openNewStudent(page,'Автоперевод · тест');
  await page.route('**/api/ai/translate-word',route=>route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({es:'el cuaderno',ru:'тетрадь',source:'ai'})}));
  await record(page,'el cuaderno');
- const row=page.locator('.lesson-word-row').filter({hasText:'el cuaderno'});await expect(row).toContainText('тетрадь');await expect(row.locator('.word-record-date')).not.toBeEmpty();
+ const row=page.locator('.lesson-word-row').filter({hasText:'el cuaderno'});await expect(row.locator('.lesson-word-translation')).toHaveCount(0);await row.locator('.lesson-word-reveal').click();await expect(row).toContainText('тетрадь');await expect(page.locator('.lesson-words-heading')).not.toBeEmpty();
  const state=(await (await page.request.get('/api/state',{headers:{'X-Student-Id':result.student.id}})).json()).state;expect(state.cards[0].ru).toBe('тетрадь');expect(state.lessons[0].cardIds).toContain(state.cards[0].id);
 });
 test('unavailable AI preserves the entered word and creates no empty lesson or untranslated card',async({page})=>{
@@ -79,6 +79,17 @@ test('teacher pastes a whole list into Words and saves one dated record without 
  let state=(await (await page.request.get('/api/state',{headers:{'X-Student-Id':result.student.id}})).json()).state;expect(state.cards).toHaveLength(0);expect(state.lessons).toHaveLength(0);
  await field.fill('el comedor — столовая\nla cocina — кухня\nla ventana — окно\nel comedor — столовая');await page.getByRole('button',{name:'Добавить список',exact:true}).click();await expect(field).toHaveValue('');await expect(page.locator('.lesson-word-row')).toHaveCount(3);
  state=(await (await page.request.get('/api/state',{headers:{'X-Student-Id':result.student.id}})).json()).state;expect(state.cards).toHaveLength(3);expect(state.lessons).toHaveLength(1);expect(state.lessons[0].cardIds).toHaveLength(3);
- await expect(page.locator('.lesson-word-row').filter({hasText:'el comedor'})).toContainText('столовая');
+ const row=page.locator('.lesson-word-row').filter({hasText:'el comedor'});await row.locator('.lesson-word-reveal').click();await expect(row).toContainText('столовая');
  await page.getByRole('button',{name:'Тренировать слова урока',exact:true}).click();await expect(page.getByRole('combobox',{name:'Слова какого урока',exact:true})).toHaveValue(state.lessons[0].id);
+});
+
+test('compact word rows reveal meanings and examples on click; teacher can change the learner level',async({page})=>{
+ const result=await openNewStudent(page,'Уровень и примеры · тест');await record(page,'el comedor — столовая');
+ const options={headers:{'X-Student-Id':result.student.id}};const state=(await (await page.request.get('/api/state',options)).json()).state;
+ await page.request.patch('/api/cards/'+state.cards[0].id,{...options,data:{examples:[{es:'Como en el comedor.',ru:'Я ем в столовой.'}]}});await page.reload();
+ const row=page.locator('.lesson-word-row').filter({hasText:'el comedor'});await expect(row.locator('.lesson-word-translation')).toHaveCount(0);await row.locator('.lesson-word-reveal').click();await expect(row).toContainText('Я ем в столовой.');await expect(row.getByRole('button',{name:'Озвучить el comedor',exact:true})).toBeVisible();
+ await row.locator('.lesson-word-reveal').click();await expect(row.locator('.lesson-word-translation')).toHaveCount(0);
+ await page.getByRole('button',{name:'Мои ученики',exact:true}).first().click();const profile=page.locator('.student-card').filter({has:page.getByRole('heading',{name:'Уровень и примеры · тест',exact:true})});await profile.getByRole('button',{name:'Имя и уровень',exact:true}).click();
+ await page.getByRole('combobox',{name:'Уровень ученика',exact:true}).selectOption('B1');await page.getByRole('dialog').getByRole('button',{name:'Сохранить',exact:true}).click();await expect(profile).toContainText('B1');
+ await profile.getByRole('button',{name:'Открыть кабинет',exact:true}).click();await expect(page.locator('.student-name')).toContainText('B1');
 });

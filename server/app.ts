@@ -1,4 +1,5 @@
 import express from 'express';
+import {wordExample,levelGuidance} from './word-example.js';
 import {translateWord} from './translate-word.js';
 import {LingvaSessions} from './lingva.js';
 import {accessControl,type Principal} from './access.js';
@@ -18,7 +19,7 @@ const date=z.iso.date();
 const seconds=z.number().min(0).max(1800).default(0);
 const tense=z.enum(Object.keys(tenseNames) as [Tense,...Tense[]]);
 const exampleTense=z.enum(Object.keys(exampleTenseNames) as [ExampleTense,...ExampleTense[]]);
-const example=z.object({es:str,ru:str,tense:z.string().max(100).optional()});
+const example=z.object({es:str,ru:str,tense:z.string().max(100).optional(),level:z.string().max(80).optional()});
 const cardInput=z.object({es:str,ru:str,type:z.enum(['word','chunk','construction']).default('word'),topic:str,register:z.enum(['neutral','colloquial','vulgar']).default('neutral'),source:z.string().max(4000).default('Добавлено преподавателем'),examples:z.array(example).max(20).default([]),enabled:z.boolean().optional(),focused:z.boolean().optional()});
 const normalize=wordKey;
 const find=<T extends {id:string}>(items:T[],key:string)=>{const x=items.find(v=>v.id===key);if(!x)throw new AppError(404,'Запись не найдена. Обновите страницу.');return x;};
@@ -32,7 +33,7 @@ export function createApp(store:Store) {
   const app=express(); app.disable('x-powered-by');
   const access=accessControl(store);
   const lingva=new LingvaSessions();
-  const studentPrompt=()=>{const {plan}=store.read();return teacherPrompt+' Учебный профиль: '+JSON.stringify({level:plan.level,goal:plan.goal});};
+  const studentPrompt=()=>{const {plan}=store.read();return teacherPrompt+' '+levelGuidance(plan.level)+' Учебный профиль: '+JSON.stringify({level:plan.level,goal:plan.goal});};
   if(process.env.NODE_ENV==='production')app.set('trust proxy',1);
   app.use((req,res,next)=>{
     res.setHeader('X-Content-Type-Options','nosniff');res.setHeader('Referrer-Policy','same-origin');res.setHeader('X-Frame-Options','SAMEORIGIN');
@@ -67,7 +68,7 @@ export function createApp(store:Store) {
     res.status(201).json(store.createStudent(input.name,input.level,input.examples));
   });
   app.post('/api/students/:studentId/code',(req,res)=>{if(!store.student(req.params.studentId))throw new AppError(404,'Ученик не найден.');res.json({code:store.rotateCode(req.params.studentId)});});
-  app.patch('/api/students/:studentId',(req,res)=>{if(!store.student(req.params.studentId))throw new AppError(404,'Ученик не найден.');const {name}=z.object({name:z.string().trim().min(1).max(120)}).parse(req.body);store.renameStudent(req.params.studentId,name);res.json(store.profile(req.params.studentId));});
+  app.patch('/api/students/:studentId',(req,res)=>{if(!store.student(req.params.studentId))throw new AppError(404,'Ученик не найден.');const {name,level}=z.object({name:z.string().trim().min(1).max(120),level:z.enum(['A1','A2','B1','B2','C1','C2']).optional()}).parse(req.body);store.withStudent(req.params.studentId,()=>store.mutate(state=>{store.renameStudent(req.params.studentId,name);if(level)state.plan.level=level;}));res.json(store.profile(req.params.studentId));});
   app.use('/api',(req,res,next)=>{
     const principal=res.locals.principal as Principal;
     const selected=req.headers['x-student-id']??req.query.studentId;
@@ -82,6 +83,7 @@ export function createApp(store:Store) {
   app.use('/api',(req,res,next)=>{
     if((res.locals.principal as Principal).role==='teacher'||['GET','HEAD','OPTIONS'].includes(req.method)){next();return;}
     const permitted=(req.method==='POST'&&['/lingva/start','/lingva/answer','/review','/verbs/review','/diary','/listening/review','/ai/speech','/ai/dialog','/ai/listening','/import/pdf','/import/cards/preview','/import/cards/confirm'].includes(req.path))
+      ||(req.method==='POST'&&/^\/ai\/cards\/[^/]+\/word-example$/.test(req.path))
       ||(req.method==='PATCH'&&/^\/assignments\/[^/]+$/.test(req.path));
     if(req.method==='PATCH'&&/^\/cards\/[^/]+$/.test(req.path)){
       req.body=z.object({focused:z.boolean()}).strict().parse(req.body);next();return;
@@ -99,7 +101,7 @@ export function createApp(store:Store) {
   }));});
   app.patch('/api/cards/:id',(req,res)=>{const p=cardInput.partial().parse(req.body);res.json(store.mutate(s=>{const c=find(s.cards,req.params.id);if(p.es&&s.cards.some(x=>x.id!==c.id&&normalize(x.es)===normalize(p.es!)))throw new AppError(409,'Такая фраза уже есть в базе.');Object.assign(c,p);return c;}));});
   app.get('/api/cards/:id/context',(req,res)=>{
-    const state=store.read();res.json(cardContext(find(state.cards,req.params.id),state.verbTables));
+    const state=store.read();const card=find(state.cards,req.params.id);res.json(cardContext({...card,examples:card.examples.filter(e=>!e.level||e.level===state.plan.level)},state.verbTables));
   });
   app.put('/api/cards/:id/tense-example',(req,res)=>{
     const input=z.object({tense:exampleTense,es:str,ru:str}).parse(req.body);
@@ -134,12 +136,21 @@ export function createApp(store:Store) {
   // Bound paid AI requests per workspace, independent of the browser.
   const callsByStudent=new Map<string,number[]>();
   app.use('/api/ai',(_req,res,next)=>{const key=res.locals.studentId as string,aiCalls=(callsByStudent.get(key)||[]).filter(t=>Date.now()-t<3600000);callsByStudent.set(key,aiCalls);if(aiCalls.length>=80){res.status(429).json({error:'Часовой лимит запросов достигнут. Попробуйте позже.'});return;}aiCalls.push(Date.now());next();});
+  const pendingExamples=new Map<string,Promise<unknown>>();
+  app.post('/api/ai/cards/:id/word-example',async(req,res)=>{
+    const state=store.read(),card=find(state.cards,req.params.id),level=state.plan.level;
+    const saved=card.examples.find(example=>!example.level||example.level===level);if(saved){res.json(saved);return;}
+    const key=res.locals.studentId+':'+card.id+':'+level;
+    let promise=pendingExamples.get(key);
+    if(!promise){promise=(async()=>{const example=await wordExample(card,level);store.mutate(current=>{const target=find(current.cards,card.id);if(current.plan.level!==level||target.es!==card.es||target.ru!==card.ru)throw new AppError(409,'Уровень или слово изменились. Откройте слово заново.');if(!target.examples.some(item=>item.level===level))target.examples.push(example);});return example;})();pendingExamples.set(key,promise);}
+    try{res.json(await promise);}finally{if(pendingExamples.get(key)===promise)pendingExamples.delete(key);}
+  });
   app.post('/api/ai/cards/:id/examples',async(req,res)=>{
-    const card=find(store.read().cards,req.params.id);
+    const initial=store.read(),level=initial.plan.level,card=find(initial.cards,req.params.id);
     const raw=await claude(studentPrompt()+' Создай 6 естественных коротких примеров именно с данным словом/фразой и его формами. Верни только JSON-массив [{tense,es,ru}]. Обязательно по одному примеру для ключей: presente, futuro_proximo (только ir a + infinitivo), gerundio_presente (estar + gerundio), perfecto, indefinido, imperfecto. Для существительного меняется время предложения, существительное не спрягай. Для состояний не придумывай неестественное estoy estando: покажи слово в контексте с естественным действием прямо сейчас. Не меняй значение слова, учитывай материалы. Переводи весь пример на русский.',JSON.stringify({es:card.es,ru:card.ru,topic:card.topic,examples:card.examples}));
     const examples=z.array(z.object({tense:exampleTense,es:str,ru:str})).length(6).parse(aiJSON(raw));
     if(new Set(examples.map(e=>e.tense)).size!==6)throw new AppError(502,'ИИ не подготовил все шесть времён. Попробуйте ещё раз.');
-    store.mutate(s=>{const current=find(s.cards,req.params.id);const saved=new Set(current.examples.map(e=>resolveExampleTense(e.tense)));current.examples.push(...examples.filter(e=>!saved.has(e.tense)));});
+    store.mutate(s=>{const current=find(s.cards,req.params.id);if(s.plan.level!==level)throw new AppError(409,'Уровень изменился. Повторите запрос.');const saved=new Set(current.examples.filter(e=>!e.level||e.level===level).map(e=>resolveExampleTense(e.tense)));current.examples.push(...examples.filter(e=>!saved.has(e.tense)).map(e=>({...e,level})));});
     res.json({ok:true});
   });
   app.post('/api/ai/translate-word',async(req,res)=>{const {es}=z.object({es:z.string().trim().min(1).max(4000).refine(value=>!/[\r\n]/.test(value),'Введите одно слово или выражение.')} ).parse(req.body);if(!aiReady()&&!store.read().cards.some(card=>normalize(card.es)===normalize(es)))throw new AppError(503,'Автоперевод пока не подключён. Добавьте ANTHROPIC_API_KEY в Render или введите слово — перевод вручную.');res.json(await translateWord(store.read(),es));});
