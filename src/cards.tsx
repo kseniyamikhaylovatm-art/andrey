@@ -5,12 +5,13 @@ import {api,today} from './api';
 import {CardImportModal} from './card-import';
 import {CardContext} from './card-context';
 import {usePracticeAudio} from './use-practice-audio';
+import {readRoute} from './navigation';
 import {exampleTenseNames} from './types';
 import type {Card} from './types';
 import {Badge,Button,Empty,Field,Modal,Panel,SectionTitle,Sound} from './ui';
 function shuffle<T>(list:T[]):T[]{const a=[...list];for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]];}return a;}
 export function CardsPage(){
-  const {state:s,run,notify,go}=useApp();const audio=usePracticeAudio(notify);const [view,setView]=useState('train'),[mode,setMode]=useState('new'),[topic,setTopic]=useState('Всё'),[search,setSearch]=useState(''),[editor,setEditor]=useState<Card|null|false>(false);
+  const {state:s,run,notify,go}=useApp();const audio=usePracticeAudio(notify);const [view,setView]=useState(()=>{const v=readRoute().params.get('view');return v&&['train','base','day'].includes(v)?v:'train';}),[mode,setMode]=useState(()=>{const m=readRoute().params.get('mode');return m&&['new','review','focus','all'].includes(m)?m:'new';}),[topic,setTopic]=useState(()=>readRoute().params.get('topic')||'Всё'),[search,setSearch]=useState(''),[editor,setEditor]=useState<Card|null|false>(false);
   const [queue,setQueue]=useState<string[]>([]),[index,setIndex]=useState(0),[choices,setChoices]=useState<string[]>([]),[answer,setAnswer]=useState(''),[result,setResult]=useState<boolean|null>(null),[busy,setBusy]=useState(false),[score,setScore]=useState(0),[finished,setFinished]=useState(false);
   const [importing,setImporting]=useState(false);
   const started=useRef(Date.now());

@@ -1,7 +1,7 @@
 import {test,expect} from '@playwright/test';
 test('study, conjugate, track lessons and retain progress after reload',async({page})=>{
  const errors:string[]=[];page.on('pageerror',e=>errors.push(e.message));
- await page.goto('/');await expect(page.getByRole('heading',{name:'Ближе к Испании. С каждым словом.'})).toBeVisible();
+ await page.goto('/');await expect(page.getByRole('heading',{name:'Сегодня',exact:true})).toBeVisible();
  await page.getByRole('button',{name:'Начать практику'}).click();await page.getByRole('button',{name:'Начать тренировку',exact:true}).click();
  const word=await page.locator('.flashcard-word h2').innerText();const {state}=await (await page.request.get('/api/state')).json();const card=state.cards.find((c:{es:string})=>c.es===word);
  await page.getByRole('button',{name:card.ru,exact:false}).filter({has:page.locator('.option-letter')}).click();await expect(page.getByRole('status').filter({hasText:'¡Muy bien!'})).toBeVisible();
@@ -21,7 +21,7 @@ test('study, conjugate, track lessons and retain progress after reload',async({p
 });
 test('all eight tabs work on a phone without horizontal overflow',async({page})=>{
  await page.setViewportSize({width:390,height:844});await page.goto('/');
- for(const [tab,heading] of [['Кабинет','Кабинет преподавателя'],['Автоматизация','Слова, которые остаются'],['Глаголы','Глаголы без спешки'],['Речь','Ваш голос на испанском'],['Слух','Услышать и понять'],['Прогресс','Ваш испанский растёт'],['Оплата','Встречаемся и учимся'],['План','Ближе к Испании. С каждым словом.']]){
+ for(const [tab,heading] of [['Кабинет','Кабинет преподавателя'],['Автоматизация','Слова, которые остаются'],['Глаголы','Глаголы без спешки'],['Речь','Ваш голос на испанском'],['Слух','Услышать и понять'],['Прогресс','Ваш испанский растёт'],['Оплата','Встречаемся и учимся'],['План','Сегодня']]){
   await page.getByRole('button',{name:'Открыть меню'}).click();await page.getByRole('link',{name:tab,exact:tab!=='Автоматизация'}).click();
   if(tab==='Глаголы')await page.getByRole('button',{name:'Закрыть',exact:true}).click();
   await expect(page.getByRole('heading',{name:heading,exact:true})).toBeVisible();
@@ -29,7 +29,7 @@ test('all eight tabs work on a phone without horizontal overflow',async({page})=
  }
  await page.screenshot({path:'test-results/mobile-plan.png',fullPage:true,animations:'disabled'});
 });
-test('desktop plan visual',async({page})=>{await page.setViewportSize({width:1440,height:1100});await page.goto('/');await expect(page.getByRole('heading',{name:'Ваш маршрут'})).toBeVisible();await page.screenshot({path:'test-results/desktop-plan.png',fullPage:true,animations:'disabled'});});
+test('desktop plan visual',async({page})=>{await page.setViewportSize({width:1440,height:1100});await page.goto('/');await expect(page.getByRole('heading',{name:'План обучения'})).toBeVisible();await page.screenshot({path:'test-results/desktop-plan.png',fullPage:true,animations:'disabled'});});
 
 test('import a real Cyrillic PDF as multiple cards without AI, edit before saving and skip duplicates', async ({ page, browser }) => {
  const printPage=await browser.newPage();
