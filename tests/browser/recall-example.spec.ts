@@ -8,7 +8,7 @@ test('known recall uses a level-specific saved example, generates a missing one 
  const example={es:'Tengo bastante cuidado con la puerta.',ru:'Я очень осторожен с дверью.',level:own.plan.level,tense:'presente'};let calls=0;
  await page.route('**/api/state',async route=>{const response=await route.fetch();const data=await response.json();data.meta.ai=true;await route.fulfill({json:data});});
  await page.route('**/api/ai/cards/'+card.id+'/word-example',async route=>{calls++;const saved=await page.request.patch('/api/cards/'+card.id,{data:{examples:[example]}});expect(saved.ok()).toBe(true);await route.fulfill({json:example});});
- await page.goto('/#cards');await page.getByRole('combobox',{name:'Выберите тему'}).selectOption('Recall: example fixture');
+ await page.goto('/#cards?view=train');await page.getByRole('combobox',{name:'Выберите тему'}).selectOption('Recall: example fixture');
  await page.getByRole('button',{name:'Начать тренировку',exact:true}).click();expect(spoken).toHaveLength(0);
  await page.getByRole('button',{name:'Подсказка',exact:true}).click();await expect(page.locator('.recall-translation')).toHaveText(card.ru);
  await page.screenshot({path:'test-results/recall-hint-desktop.png',fullPage:true,animations:'disabled'});

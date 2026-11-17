@@ -1,3 +1,4 @@
+import {choiceCorrect} from '../src/practice-choices.js';
 import {studyMaterial,materialGuidance} from './study-material.js';
 import express from 'express';
 import {miroBoardId,readMiroBoard} from './miro.js';
@@ -22,7 +23,7 @@ const seconds=z.number().min(0).max(1800).default(0);
 const tense=z.enum(Object.keys(tenseNames) as [Tense,...Tense[]]);
 const exampleTense=z.enum(Object.keys(exampleTenseNames) as [ExampleTense,...ExampleTense[]]);
 const example=z.object({es:str,ru:str,tense:z.string().max(100).optional(),level:z.string().max(80).optional()});
-const cardInput=z.object({es:str,ru:str,type:z.enum(['word','chunk','construction']).default('word'),topic:str,register:z.enum(['neutral','colloquial','vulgar']).default('neutral'),source:z.string().max(4000).default('Добавлено преподавателем'),examples:z.array(example).max(20).default([]),enabled:z.boolean().optional(),focused:z.boolean().optional()});
+const cardInput=z.object({imageUrl:z.union([z.literal(''),z.url().startsWith('https://')]).optional(),es:str,ru:str,type:z.enum(['word','chunk','construction']).default('word'),topic:str,register:z.enum(['neutral','colloquial','vulgar']).default('neutral'),source:z.string().max(4000).default('Добавлено преподавателем'),examples:z.array(example).max(20).default([]),enabled:z.boolean().optional(),focused:z.boolean().optional()});
 const normalize=wordKey;
 const find=<T extends {id:string}>(items:T[],key:string)=>{const x=items.find(v=>v.id===key);if(!x)throw new AppError(404,'Запись не найдена. Обновите страницу.');return x;};
 const lessonInput=z.object({date,title:str,note:z.string().max(8000).default(''),status:z.enum(['planned','held','cancelled']).default('planned'),text:z.string().max(100000).optional(),video:z.union([z.literal(''),z.url().startsWith('https://')]).optional()});
@@ -85,7 +86,7 @@ export function createApp(store:Store) {
   // Enforce permissions on the server, including requests made outside the interface.
   app.use('/api',(req,res,next)=>{
     if((res.locals.principal as Principal).role==='teacher'||['GET','HEAD','OPTIONS'].includes(req.method)){next();return;}
-    const permitted=(req.method==='POST'&&['/lingva/start','/lingva/answer','/review','/review/self','/verbs/review','/diary','/listening/review','/ai/speech','/ai/dialog','/ai/listening','/import/pdf','/import/cards/preview','/import/cards/confirm'].includes(req.path))
+    const permitted=(req.method==='POST'&&['/lingva/start','/lingva/answer','/review','/review/self','/review/choice','/verbs/review','/diary','/listening/review','/ai/speech','/ai/dialog','/ai/listening','/import/pdf','/import/cards/preview','/import/cards/confirm'].includes(req.path))
       ||(req.method==='POST'&&/^\/ai\/cards\/[^/]+\/word-example$/.test(req.path))
       ||(req.method==='PATCH'&&/^\/assignments\/[^/]+$/.test(req.path));
     if(req.method==='PATCH'&&/^\/cards\/[^/]+$/.test(req.path)){
@@ -110,6 +111,10 @@ export function createApp(store:Store) {
     const input=z.object({tense:exampleTense,es:str,ru:str}).parse(req.body);
     store.mutate(s=>{const card=find(s.cards,req.params.id);const index=card.examples.findIndex(e=>resolveExampleTense(e.tense)===input.tense);if(index===-1)card.examples.push(input);else card.examples[index]=input;});
     res.json({ok:true});
+  });
+  app.post('/api/review/choice',(req,res)=>{
+    const p=z.object({cardId:str,answerCardId:str,direction:z.enum(['es-ru','ru-es']),attemptId:z.uuid(),seconds}).parse(req.body);
+    res.json(store.mutate(s=>{const card=find(s.cards,p.cardId),answer=find(s.cards,p.answerCardId);if(!card.enabled||!answer.enabled)throw new AppError(400,'Карточка выключена.');const correct=choiceCorrect(card,answer,p.direction),key='choice:'+p.attemptId,previous=s.attempts.find(a=>a.id===key);if(previous){if(previous.cardId!==card.id||previous.answer!==p.direction+':'+answer.id)throw new AppError(409,'Этот ответ уже сохранён.');return {correct:previous.correct};}review(card,correct);s.attempts.push({id:key,kind:'card',at:new Date().toISOString(),correct,seconds:p.seconds,cardId:card.id,topic:card.topic,answer:p.direction+':'+answer.id});return {correct};}));
   });
   app.post('/api/review/self',(req,res)=>{
     const p=z.object({cardId:str,correct:z.boolean(),attemptId:z.uuid(),seconds}).parse(req.body);

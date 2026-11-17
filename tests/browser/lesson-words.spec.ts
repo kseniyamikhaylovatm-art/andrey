@@ -32,7 +32,7 @@ test('teacher keeps dated lesson lists and trains all words of the selected less
   await page.getByRole('button',{name:'Начать тренировку',exact:true}).click();await expect(page.locator('.practice-card .section-heading .small')).toHaveText('1 / 12');
   const current=await page.locator('.flashcard-word h2').innerText();expect(pairs.map(pair=>pair.split(' — ')[0])).toContain(current);
   await page.getByRole('button',{name:'Закончить сейчас',exact:true}).click();
-  await page.getByRole('button',{name:'Все слова',exact:true}).click();await page.getByRole('button',{name:'База фраз',exact:false}).click();
+  await page.getByRole('button',{name:'Все слова',exact:true}).click();await page.getByRole('button',{name:'База слов',exact:true}).click();
   await expect(page.locator('.vocab-row').filter({hasText:'el barrio'})).toContainText('городской район');
 });
 

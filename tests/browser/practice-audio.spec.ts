@@ -24,7 +24,7 @@ const audit=(page:Page)=>page.evaluate(()=>(window as unknown as {audioAudit:{sp
 const hint=(page:Page)=>page.getByRole('button',{name:'Подсказка',exact:true}).click();
 const grade=(page:Page,correct=true)=>page.getByRole('button',{name:correct?'Вспомнил':'Не вспомнил',exact:true}).click();
 test('recall stays silent until hint, grades schedule SRS, and a known word reads its saved example after the signal',async({page})=>{
- await observeAudio(page);await page.setViewportSize({width:1440,height:1100});await page.goto('/#cards');
+ await observeAudio(page);await page.setViewportSize({width:1440,height:1100});await page.goto('/#cards?view=train');
  await page.getByRole('button',{name:'Начать тренировку',exact:true}).click();
  const first=await page.locator('.flashcard-word h2').innerText();
  expect((await audit(page)).spoken).toHaveLength(0);await expect(page.locator('.recall-translation')).toHaveCount(0);
@@ -56,14 +56,14 @@ test('recall stays silent until hint, grades schedule SRS, and a known word read
  await page.reload();await expect(page.getByRole('switch',{name:'Автоозвучка слов'})).not.toBeChecked();await expect(page.getByRole('switch',{name:'Звуки ответов'})).not.toBeChecked();
 });
 test('a failed self-review request produces no signal or example and lets the learner retry',async({page})=>{
- await observeAudio(page);await page.goto('/#cards');await page.getByRole('button',{name:'Начать тренировку',exact:true}).click();await hint(page);
+ await observeAudio(page);await page.goto('/#cards?view=train');await page.getByRole('button',{name:'Начать тренировку',exact:true}).click();await hint(page);
  await page.route('**/api/review/self',route=>route.fulfill({status:503,json:{error:'Сохранение временно недоступно'}}));await grade(page);
  await expect(page.getByRole('status').filter({hasText:'Сохранение временно недоступно'})).toBeVisible();expect((await audit(page)).tones).toHaveLength(0);
  await expect(page.getByRole('button',{name:'Вспомнил',exact:true})).toBeEnabled();await page.unroute('**/api/review/self');await grade(page);
  await expect(page.locator('.answer-feedback')).toContainText('Поздравляем');await expect.poll(async()=>(await audit(page)).tones.length).toBe(2);
 });
 test('a new question cancels the pending example and mobile recall controls stay readable',async({page})=>{
- await observeAudio(page);await page.setViewportSize({width:390,height:844});await page.goto('/#cards');await page.getByRole('button',{name:'Начать тренировку',exact:true}).click();
+ await observeAudio(page);await page.setViewportSize({width:390,height:844});await page.goto('/#cards?view=train');await page.getByRole('button',{name:'Начать тренировку',exact:true}).click();
  await hint(page);const button=page.getByRole('button',{name:'Вспомнил',exact:true});expect((await button.boundingBox())!.height).toBeGreaterThanOrEqual(76);
  expect(await page.locator('.flashcard-word h2').evaluate(e=>parseFloat(getComputedStyle(e).fontSize))).toBeGreaterThanOrEqual(40);
  await grade(page);await expect(page.locator('.answer-feedback')).toBeVisible();await page.getByRole('button',{name:'Следующая фраза',exact:false}).click();

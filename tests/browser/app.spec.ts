@@ -35,7 +35,7 @@ test('import a real Cyrillic PDF as multiple cards without AI, edit before savin
  const printPage=await browser.newPage();
  await printPage.setContent('<!doctype html><meta charset="utf-8"><style>p{font:18px Arial; margin:18px}</style><p>Карточки урока</p><p>el faro — маяк</p><p>la marea – прилив</p><p>remar - грести</p>');
  const pdf=await printPage.pdf();await printPage.close();
- await page.goto('/#cards');
+ await page.goto('/#cards?view=train');
  const before=(await (await page.request.get('/api/state')).json()).state;
  await page.getByRole('button',{name:'Загрузить PDF карточек',exact:true}).click();
  const modal=page.getByRole('dialog');
@@ -52,7 +52,7 @@ test('import a real Cyrillic PDF as multiple cards without AI, edit before savin
  await modal.getByRole('button',{name:'Добавить все карточки'}).click();
  await expect(modal.getByRole('status')).toContainText('Добавлено: 2');
  await modal.getByRole('button',{name:'Закрыть',exact:true}).click();
- await page.getByRole('button',{name:'База фраз',exact:false}).click();
+ await page.getByRole('button',{name:'База слов',exact:true}).click();
  await page.getByRole('textbox',{name:'Поиск по базе'}).fill('la marea');
  await expect(page.locator('.vocab-row')).toContainText('прилив и отлив');
  await page.reload();await page.getByRole('button',{name:'Загрузить PDF карточек',exact:true}).click();
@@ -81,7 +81,7 @@ test('speech explains why AI feedback is unavailable and retains the answer draf
 test('six tabs below the answered card show examples, forms and teacher edits on desktop and mobile',async({page})=>{
  const response=await page.request.post('/api/cards',{data:{es:'actuar',ru:'действовать',topic:'Тест времён',source:'Урок',examples:[{es:'Actuamos juntos.',ru:'Мы действуем вместе.'}]}});
  expect(response.ok()).toBe(true);const card=await response.json();
- await page.setViewportSize({width:1440,height:1100});await page.goto('/#cards');
+ await page.setViewportSize({width:1440,height:1100});await page.goto('/#cards?view=train');
  await page.getByRole('combobox',{name:'Выберите тему'}).selectOption('Тест времён');
  await page.getByRole('button',{name:'Начать тренировку',exact:true}).click();
  await expect(page.getByRole('tablist',{name:'Времена примеров'})).toHaveCount(0);
@@ -118,7 +118,7 @@ test('six tabs below the answered card show examples, forms and teacher edits on
 
 test('a newly imported word can get a teacher example in a chosen tense without AI',async({page})=>{
  await page.request.post('/api/import/cards/confirm',{data:{topic:'Новые примеры',source:'Список',cards:[{es:'una brisa suave',ru:'лёгкий бриз'}]}});
- await page.goto('/#cards');await page.getByRole('combobox',{name:'Выберите тему'}).selectOption('Новые примеры');
+ await page.goto('/#cards?view=train');await page.getByRole('combobox',{name:'Выберите тему'}).selectOption('Новые примеры');
  await page.getByRole('button',{name:'Начать тренировку',exact:true}).click();
  await page.getByRole('button',{name:'Подсказка',exact:true}).click();await page.getByRole('button',{name:'Вспомнил',exact:true}).click();
  await page.getByRole('tab',{name:'Ir a + infinitivo',exact:false}).click();

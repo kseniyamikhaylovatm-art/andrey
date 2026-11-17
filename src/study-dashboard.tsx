@@ -23,7 +23,7 @@ export function StudyDashboard({editPlan,addDiary,addCard,importCards}:Actions){
         <p className="study-queue-counts">К повторению: <strong>{stats.due}</strong><span>Новых слов: <strong>{stats.fresh}</strong></span></p>
         <div className="study-start-actions">
           <Button disabled={!active} onClick={()=>go('cards',{mode:practiceMode})}><Layers size={20}/>{stats.due?'Повторить карточки · '+stats.due:stats.fresh?'Новые слова · '+stats.fresh:'Все карточки · '+active}</Button>
-          <Button secondary onClick={()=>go('cards',{view:'day'})}><CalendarDays size={20}/>Тренировка дня</Button>
+          <Button secondary onClick={()=>go('cards')}><CalendarDays size={20}/>Выбрать формат</Button>
         </div>
         <p className="study-start-detail">Карточки, формы глаголов, речь и задания на слух.</p>
       </Panel>

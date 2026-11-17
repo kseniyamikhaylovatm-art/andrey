@@ -31,7 +31,7 @@ export interface CardContextData {
 export interface Card {
   id: string; es: string; ru: string; type: 'word' | 'chunk' | 'construction'; topic: string;
   register: 'neutral' | 'colloquial' | 'vulgar'; enabled: boolean; focused: boolean;
-  examples: Example[]; source: string; stage: number; due: string; seen: number; correct: number;
+  imageUrl?: string; examples: Example[]; source: string; stage: number; due: string; seen: number; correct: number;
 }
 export interface Attempt {
   id: string; kind: 'card' | 'verb' | 'speech' | 'listening'; at: string; correct: boolean | null;
