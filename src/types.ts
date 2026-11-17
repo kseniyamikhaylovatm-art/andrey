@@ -37,7 +37,8 @@ export interface Attempt {
   id: string; kind: 'card' | 'verb' | 'speech' | 'listening'; at: string; correct: boolean | null;
   seconds: number; cardId?: string; topic?: string; verb?: string; tense?: string; answer?: string;
 }
-export interface Lesson { id: string; date: string; title: string; status: 'planned' | 'held' | 'cancelled'; note: string; text?: string; video?: string }
+export interface Lesson { id: string; date: string; title: string; status: 'planned' | 'held' | 'cancelled'; note: string; text?: string; video?: string; cardIds?: string[] }
+export interface LessonWordResult {lessonId:string;cardId:string;created:boolean;translationKept:boolean;enabled:boolean}
 export interface Assignment { id: string; title: string; due: string; done: boolean }
 export interface Diary { id: string; date: string; text: string; spoke: boolean; avoided: boolean }
 export interface SpeechRecord { id: string; date: string; mode: string; topic: string; text: string; feedback: string }

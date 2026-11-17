@@ -443,4 +443,60 @@ th { color: #89724b; }
 @media(max-width:1150px){.student-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.masthead-actions{gap:10px}.masthead-actions .students-link{font-size:13px;padding:9px 12px}}
 @media(max-width:700px){.student-grid{grid-template-columns:1fr;gap:18px}.roster-toolbar{flex-direction:column;align-items:stretch;padding:23px}.roster-toolbar .field{width:100%}.roster-content{padding-top:28px}.student-card .button{font-size:16px}.issued-code code{font-size:20px}.masthead-actions .students-link{display:none}}
 @media(max-width:700px){.teacher-roster-header .masthead-actions>.icon-btn{display:inline-flex}}
+.lesson-word-entry,.lesson-words-panel{margin-bottom:24px}
+.lesson-word-entry .form>p{margin:0}
+.lesson-entry-meta{display:grid;grid-template-columns:205px minmax(0,1fr) minmax(180px,.7fr);gap:22px;align-items:end}
+.lesson-entry-selected{display:flex;align-items:center;gap:12px;min-height:49px;line-height:1.5;color:var(--navy);padding-bottom:8px;overflow-wrap:anywhere}
+.lesson-entry-selected svg{flex-shrink:0;color:#af803c}
+.lesson-entry-line{display:flex;gap:15px;align-items:flex-end}
+.lesson-entry-line>.field{flex:1;min-width:0}
+.lesson-entry-line .button{min-height:50px;flex-shrink:0;align-self:flex-end}
+.lesson-words-heading{display:flex;justify-content:space-between;gap:24px;align-items:center;margin-bottom:25px}
+.lesson-words-heading h2{margin:10px 0 0;font-size:34px}
+.lesson-words-heading p{font-size:16px;margin:8px 0 0}
+.lesson-words-controls{display:flex;align-items:center;gap:20px}
+.lesson-words-controls .check-label{font-size:15px}
+.lesson-date-arrows{display:flex;gap:5px}
+.lesson-date-arrows .icon-btn{border:1px solid #e6d9c2;border-radius:9px;width:35px;height:35px;color:#8c6b39}
+.lesson-date-arrows .icon-btn:disabled{opacity:.35;cursor:default}
+.lesson-words-toolbar{display:flex;align-items:flex-end;flex-wrap:wrap;gap:18px;margin-bottom:23px;padding-bottom:23px;border-bottom:1px solid #e8dbc5}
+.lesson-words-toolbar>.field{flex:1;min-width:240px}
+.lesson-words-toolbar>.small{padding-bottom:13px}
+.lesson-words-toolbar .button{font-size:16px;min-height:50px}
+.lesson-word-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px 17px}
+.lesson-word-row{border:1px solid #e3d6c0;background:#fffdf8;border-radius:13px;overflow:hidden;align-self:start;min-width:0}
+.lesson-word-top{display:flex;align-items:center;gap:8px;min-height:62px;padding:9px 12px}
+.lesson-word-reveal{flex:1;display:flex;align-items:flex-start;gap:13px;min-width:0;text-align:left;padding:8px 3px;color:var(--navy);border:0;background:none;cursor:pointer;font:inherit}
+.lesson-word-reveal>span{font-size:14px;color:#a08a66;min-width:20px;padding-top:3px}
+.lesson-word-reveal>strong{font-size:20px;font-weight:500;line-height:1.5;overflow-wrap:anywhere}
+.lesson-word-actions{display:flex;align-items:center;gap:5px;flex-shrink:0}
+.lesson-word-actions .icon-btn,.lesson-word-actions .star-button{padding:4px;width:31px;height:34px;color:#977440;display:inline-flex;align-items:center;justify-content:center}
+.lesson-word-actions .star-button.selected{color:#c49539}
+.lesson-word-translation{padding:0 21px 18px 47px;border-top:1px solid #eee6d9}
+.lesson-word-translation>p{font-size:18px;line-height:1.7;margin:13px 0 0;color:#655f54;overflow-wrap:anywhere}
+.lesson-word-example{border-left:2px solid #d5b474;padding-left:14px;margin-top:16px}
+.lesson-word-example p{font-size:16px;line-height:1.7;margin:5px 0;white-space:pre-wrap;overflow-wrap:anywhere}
+.lesson-word-details{display:flex;align-items:center;gap:13px;flex-wrap:wrap;margin-top:13px}
+.lesson-word-details .check-label,.lesson-word-details .text-link{font-size:13px}
+.word-disabled{background:#f3efe7}
+.word-disabled-note{display:block;font-size:12px;color:#9c7b4c;padding:0 18px 10px 47px}
+.lesson-history-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:15px}
+.lesson-history-item{display:flex;align-items:center;gap:13px;padding:19px 17px;text-align:left;border:1px solid #e5d9c5;border-radius:13px;background:#fffcf6;color:var(--navy);cursor:pointer;min-width:0;font:inherit}
+.lesson-history-item.active{border-color:#bb945c;background:#f8efdd}
+.lesson-history-item>svg{color:#ad803f;flex-shrink:0}
+.lesson-history-item>span{flex:1;min-width:0}
+.lesson-history-item strong,.lesson-history-item small{display:block;line-height:1.6;overflow-wrap:anywhere}
+.lesson-history-item strong{font-size:16px;font-weight:500}
+.lesson-history-item small{font-size:14px;color:#89785c;margin-top:5px}
+.lesson-history-item>.badge{flex:0 0 auto;min-width:23px;justify-content:center}
+.lesson-practice-notice{display:flex;align-items:center;justify-content:space-between;gap:20px;padding:17px 22px;background:#f4ebd9;border:1px solid #e1c79f;border-radius:13px;margin-bottom:22px;font-size:16px}
+.lesson-practice-notice>div{display:flex;align-items:center;gap:12px;line-height:1.6}
+.lesson-practice-notice svg{flex-shrink:0;color:#a67e42}
+.filter-row>select{min-width:0}
+.single-word-answer{display:flex;flex-direction:column;gap:18px;align-items:stretch}
+.single-word-answer input{width:100%;font-size:20px}
+.single-word-answer>.button{align-self:flex-start;font-size:18px}
+.single-word-expected{font-size:19px;line-height:1.7}
+@media(max-width:1150px){.lesson-history-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.lesson-entry-meta{grid-template-columns:190px minmax(0,1fr)}.lesson-entry-meta>.field:last-child{grid-column:1/-1}.lesson-words-toolbar>.small{padding-bottom:0}.lesson-words-heading{align-items:flex-start}.lesson-words-controls{flex-direction:column;align-items:flex-end;gap:13px}.lesson-word-reveal>strong{font-size:18px}.lesson-word-actions{gap:0}}
+@media(max-width:700px){.lesson-entry-meta{grid-template-columns:1fr;gap:18px}.lesson-entry-meta>.field:last-child{grid-column:auto}.lesson-entry-line{flex-direction:column;align-items:stretch}.lesson-entry-line>.field{width:100%}.lesson-entry-line>.button{align-self:flex-start!important;font-size:16px}.lesson-words-heading{flex-direction:column;gap:20px}.lesson-words-heading h2{font-size:30px}.lesson-words-controls{flex-direction:row;align-items:center;justify-content:space-between;width:100%;gap:10px}.lesson-words-controls .check-label{font-size:14px}.lesson-words-toolbar{gap:17px}.lesson-words-toolbar>.field{min-width:0;width:100%;flex-basis:100%}.lesson-word-grid{grid-template-columns:1fr;gap:11px}.lesson-word-top{padding:7px 9px;gap:3px}.lesson-word-reveal{gap:7px}.lesson-word-reveal>strong{font-size:18px}.lesson-word-actions .icon-btn,.lesson-word-actions .star-button{width:29px}.lesson-word-translation{padding-left:38px;padding-right:15px}.lesson-history-grid{grid-template-columns:1fr}.lesson-practice-notice{padding:15px;align-items:flex-start;flex-direction:column;gap:12px}.single-word-answer input{font-size:18px}.single-word-answer>.button{font-size:16px}.single-word-expected{font-size:17px}}
 @media(prefers-reduced-motion:reduce) { .primary-nav a { transition: none; } }

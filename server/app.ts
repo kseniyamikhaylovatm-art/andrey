@@ -9,6 +9,7 @@ import {exampleTense as resolveExampleTense} from '../src/example-tenses.js';
 import {cardContext} from './card-context.js';
 import { parseCardPairs } from './card-import.js';
 import { extractPdf } from './pdf.js';
+import {addLessonWord,lessonWordInput,wordKey} from './lesson-words.js';
 
 const str=z.string().trim().min(1).max(4000);
 const date=z.iso.date();
@@ -17,7 +18,7 @@ const tense=z.enum(Object.keys(tenseNames) as [Tense,...Tense[]]);
 const exampleTense=z.enum(Object.keys(exampleTenseNames) as [ExampleTense,...ExampleTense[]]);
 const example=z.object({es:str,ru:str,tense:z.string().max(100).optional()});
 const cardInput=z.object({es:str,ru:str,type:z.enum(['word','chunk','construction']).default('word'),topic:str,register:z.enum(['neutral','colloquial','vulgar']).default('neutral'),source:z.string().max(4000).default('Добавлено преподавателем'),examples:z.array(example).max(20).default([]),enabled:z.boolean().optional(),focused:z.boolean().optional()});
-const normalize=(s:string)=>s.trim().toLocaleLowerCase('es').normalize('NFC').replace(/[.!?¿¡]+$/g,'').replace(/\s+/g,' ');
+const normalize=wordKey;
 const find=<T extends {id:string}>(items:T[],key:string)=>{const x=items.find(v=>v.id===key);if(!x)throw new AppError(404,'Запись не найдена. Обновите страницу.');return x;};
 const lessonInput=z.object({date,title:str,note:z.string().max(8000).default(''),status:z.enum(['planned','held','cancelled']).default('planned'),text:z.string().max(100000).optional(),video:z.union([z.literal(''),z.url().startsWith('https://')]).optional()});
 const audioInput=z.object({title:str,url:z.union([z.literal(''),z.url().startsWith('https://')]),transcript:z.string().max(15000),question:str,answer:str,topic:str});
@@ -111,6 +112,8 @@ export function createApp(store:Store) {
   app.put('/api/plan',(req,res)=>{const p=planSchema.parse(req.body);store.mutate(s=>{s.plan=p;});res.json({ok:true});});
   app.post('/api/lessons',(req,res)=>{const p=lessonInput.parse(req.body);const item={...p,id:id()};store.mutate(s=>{s.lessons.push(item);});res.json(item);});
   app.patch('/api/lessons/:id',(req,res)=>{const p=lessonInput.partial().parse(req.body);store.mutate(s=>Object.assign(find(s.lessons,req.params.id),p));res.json({ok:true});});
+  app.post('/api/lesson-words',(req,res)=>{const input=lessonWordInput.parse(req.body);res.json(store.mutate(state=>addLessonWord(state,input)));});
+  app.delete('/api/lessons/:id/words/:cardId',(req,res)=>{store.mutate(state=>{const lesson=find(state.lessons,req.params.id);lesson.cardIds=(lesson.cardIds||[]).filter(key=>key!==req.params.cardId);});res.json({ok:true});});
   app.post('/api/assignments',(req,res)=>{const p=z.object({title:str,due:date}).parse(req.body);const item={...p,id:id(),done:false};store.mutate(s=>s.assignments.push(item));res.json(item);});
   app.patch('/api/assignments/:id',(req,res)=>{const p=z.object({done:z.boolean()}).parse(req.body);store.mutate(s=>Object.assign(find(s.assignments,req.params.id),p));res.json({ok:true});});
   app.post('/api/diary',(req,res)=>{const p=z.object({text:str,spoke:z.boolean(),avoided:z.boolean()}).parse(req.body);const item={...p,id:id(),date:new Date().toISOString()};store.mutate(s=>s.diary.push(item));res.json(item);});

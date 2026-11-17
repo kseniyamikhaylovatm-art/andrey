@@ -11,10 +11,11 @@ import {CardsPage} from './cards';
 import {VerbsPage} from './verbs';
 import {SpeechPage,ListeningPage} from './speech';
 import {TeacherRoster} from './teacher-roster';
+import {WordsPage} from './words';
 import './styles.css';
 import './theme.css';
 
-const components={plan:PlanPage,cabinet:CabinetPage,cards:CardsPage,verbs:VerbsPage,speech:SpeechPage,listening:ListeningPage,progress:ProgressPage,payment:PaymentPage};
+const components={plan:PlanPage,words:WordsPage,cabinet:CabinetPage,cards:CardsPage,verbs:VerbsPage,speech:SpeechPage,listening:ListeningPage,progress:ProgressPage,payment:PaymentPage};
 function App(){
   const [session,setSession]=useState<AccessSession|null>(null),[selected,setSelected]=useState<string|null>(null);
   const [error,setError]=useState(''),[toast,setToast]=useState(''),[code,setCode]=useState(''),[saving,setSaving]=useState(false);
