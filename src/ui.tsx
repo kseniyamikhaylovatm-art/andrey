@@ -3,8 +3,19 @@ import { X, ArrowUpRight, LoaderCircle, Volume2, Snail } from 'lucide-react';
 import { speak } from './api';
 import {useApp} from './context';
 export function Modal({title,children,close,wide=false}:{title:string;children:ReactNode;close:()=>void;wide?:boolean}){
-  const heading=useId();const ref=useRef<HTMLDivElement>(null);
-  useEffect(()=>{const before=document.activeElement as HTMLElement;const el=ref.current;const focus=()=>el?.querySelector<HTMLElement>('input,textarea,select,button')?.focus();focus();const onKey=(e:KeyboardEvent)=>{if(e.key==='Escape')close();if(e.key==='Tab'&&el){const focusable=[...el.querySelectorAll<HTMLElement>('button,input,textarea,select,a[href]')].filter(e=>!e.hasAttribute('disabled'));const first=focusable[0],last=focusable.at(-1);if(e.shiftKey&&document.activeElement===first){e.preventDefault();last?.focus();}else if(!e.shiftKey&&document.activeElement===last){e.preventDefault();first?.focus();}}};document.addEventListener('keydown',onKey);const overflow=document.body.style.overflow;document.body.style.overflow='hidden';return()=>{document.removeEventListener('keydown',onKey);document.body.style.overflow=overflow;before?.focus();};},[close]);
+  const heading=useId();const ref=useRef<HTMLDivElement>(null),latestClose=useRef(close);latestClose.current=close;
+  useEffect(()=>{
+    const before=document.activeElement as HTMLElement|null,el=ref.current;
+    const controls=()=>el?[...el.querySelectorAll<HTMLElement>('button,input,textarea,select,a[href]')].filter(item=>!item.hasAttribute('disabled')&&item.getClientRects().length>0):[];
+    const firstInput=el?.querySelector<HTMLElement>('input:not([disabled]):not([type="hidden"]),textarea:not([disabled]),select:not([disabled])');
+    (firstInput||controls()[0])?.focus();
+    const onKey=(event:KeyboardEvent)=>{
+      if(event.key==='Escape'){event.preventDefault();latestClose.current();}
+      if(event.key==='Tab'){const items=controls(),first=items[0],last=items.at(-1);if(event.shiftKey&&document.activeElement===first){event.preventDefault();last?.focus();}else if(!event.shiftKey&&document.activeElement===last){event.preventDefault();first?.focus();}}
+    };
+    document.addEventListener('keydown',onKey);const overflow=document.body.style.overflow;document.body.style.overflow='hidden';
+    return()=>{document.removeEventListener('keydown',onKey);document.body.style.overflow=overflow;if(before?.isConnected)before.focus();};
+  },[]);
   return <div className="modal-backdrop" onMouseDown={e=>{if(e.target===e.currentTarget)close();}}><div ref={ref} className={'modal '+(wide?'wide':'')} role="dialog" aria-modal="true" aria-labelledby={heading}><div className="section-heading"><h2 id={heading}>{title}</h2><button className="icon-btn" onClick={close} aria-label="Закрыть"><X size={20}/></button></div>{children}</div></div>;
 }
 export function Button({children,onClick,secondary=false,disabled=false,type='button',className=''}:{children:ReactNode;onClick?:()=>void;secondary?:boolean;disabled?:boolean;type?:'submit'|'button';className?:string}){return <button type={type} disabled={disabled} onClick={onClick} className={`button ${secondary?'secondary':''} ${className}`}>{children}</button>;}
