@@ -13,10 +13,10 @@ function readPreferences(): Preferences {
 
 export function usePracticeAudio(notify:(message:string)=>void) {
   const [preferences,setPreferences] = useState(readPreferences);
-  const latest = useRef(preferences), callback = useRef(notify), player = useRef<FeedbackPlayer|null>(null), warned = useRef(new Set<string>());
+  const speechTimer=useRef<ReturnType<typeof setTimeout>|null>(null),latest = useRef(preferences), callback = useRef(notify), player = useRef<FeedbackPlayer|null>(null), warned = useRef(new Set<string>());
   latest.current = preferences; callback.current = notify;
   const warn = useCallback((message:string) => { if (!warned.current.has(message)) { warned.current.add(message); callback.current(message); } }, []);
-  const cancelSpeech = useCallback(() => { try { window.speechSynthesis?.cancel(); } catch { /* browser is closing */ } }, []);
+  const cancelSpeech = useCallback(() => { if(speechTimer.current!==null){clearTimeout(speechTimer.current);speechTimer.current=null;}try { window.speechSynthesis?.cancel(); } catch { /* browser is closing */ } }, []);
   const unlock = useCallback(() => {
     if (!latest.current.feedback) return;
     player.current ??= new FeedbackPlayer(() => warn('Браузер не смог включить звуки ответов. Текстовая проверка работает.'));
@@ -31,6 +31,7 @@ export function usePracticeAudio(notify:(message:string)=>void) {
   }, [cancelSpeech,unlock,say]);
   const prepareAnswer = useCallback(() => { cancelSpeech(); unlock(); }, [cancelSpeech,unlock]);
   const answer = useCallback((correct:boolean) => { if (latest.current.feedback) player.current?.play(correct); }, []);
+  const playExample=useCallback((text:string)=>{if(speechTimer.current!==null)clearTimeout(speechTimer.current);speechTimer.current=setTimeout(()=>{speechTimer.current=null;if(latest.current.autoSpeak)say(text);},450);},[say]);
   const stop = useCallback(() => { cancelSpeech(); player.current?.stop(); }, [cancelSpeech]);
   const save = useCallback((value:Preferences) => {
     latest.current = value; setPreferences(value);
@@ -45,5 +46,5 @@ export function usePracticeAudio(notify:(message:string)=>void) {
     if (enabled) unlock(); else player.current?.stop();
   }, [save,unlock]);
   useEffect(() => () => { cancelSpeech(); player.current?.close(); player.current=null; }, [cancelSpeech]);
-  return {preferences,startWord,prepareAnswer,answer,stop,setAutoSpeak,setFeedback};
+  return {preferences,playExample,startWord,prepareAnswer,answer,stop,setAutoSpeak,setFeedback};
 }

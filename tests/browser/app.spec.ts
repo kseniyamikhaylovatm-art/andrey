@@ -4,7 +4,7 @@ test('study, conjugate, track lessons and retain progress after reload',async({p
  await page.goto('/');await expect(page.getByRole('heading',{name:'Сегодня',exact:true})).toBeVisible();
  await page.getByRole('button',{name:'Начать практику'}).click();await page.getByRole('button',{name:'Начать тренировку',exact:true}).click();
  const word=await page.locator('.flashcard-word h2').innerText();const {state}=await (await page.request.get('/api/state')).json();const card=state.cards.find((c:{es:string})=>c.es===word);
- await page.getByRole('button',{name:card.ru,exact:false}).filter({has:page.locator('.option-letter')}).click();await expect(page.getByRole('status').filter({hasText:'¡Muy bien!'})).toBeVisible();
+ await page.getByRole('button',{name:'Подсказка',exact:true}).click();await page.getByRole('button',{name:'Вспомнил',exact:true}).click();await expect(page.getByRole('status').filter({hasText:'¡Muy bien!'})).toBeVisible();
  await expect(page.locator('.example')).toBeVisible();await page.reload();await expect(page.getByRole('heading',{name:'Слова, которые остаются'})).toBeVisible();
  const after=await (await page.request.get('/api/state')).json();expect(after.state.cards.find((c:{id:string})=>c.id===card.id).seen).toBeGreaterThan(0);
  await page.getByRole('link',{name:'Глаголы',exact:true}).click();await page.getByRole('button',{name:'Практиковать',exact:true}).click();
@@ -85,7 +85,7 @@ test('six tabs below the answered card show examples, forms and teacher edits on
  await page.getByRole('combobox',{name:'Выберите тему'}).selectOption('Тест времён');
  await page.getByRole('button',{name:'Начать тренировку',exact:true}).click();
  await expect(page.getByRole('tablist',{name:'Времена примеров'})).toHaveCount(0);
- await page.getByRole('button',{name:'действовать',exact:false}).filter({has:page.locator('.option-letter')}).click();
+ await page.getByRole('button',{name:'Подсказка',exact:true}).click();await page.getByRole('button',{name:'Вспомнил',exact:true}).click();
  const tabs=page.getByRole('tablist',{name:'Времена примеров'}),panel=page.getByRole('tabpanel');
  await expect(tabs.getByRole('tab')).toHaveCount(6);
  const cases=[['Presente','Hoy actúo con calma.'],['Ir a + infinitivo','Mañana voy a actuar con calma.'],['Estoy + gerundio','Ahora estoy actuando con calma.'],['Pretérito perfecto','Hoy he actuado con calma.'],['Pretérito indefinido','Ayer actué con calma.'],['Pretérito imperfecto','Antes actuaba con calma.']];
@@ -120,7 +120,7 @@ test('a newly imported word can get a teacher example in a chosen tense without 
  await page.request.post('/api/import/cards/confirm',{data:{topic:'Новые примеры',source:'Список',cards:[{es:'una brisa suave',ru:'лёгкий бриз'}]}});
  await page.goto('/#cards');await page.getByRole('combobox',{name:'Выберите тему'}).selectOption('Новые примеры');
  await page.getByRole('button',{name:'Начать тренировку',exact:true}).click();
- await page.getByRole('button',{name:'лёгкий бриз',exact:false}).filter({has:page.locator('.option-letter')}).click();
+ await page.getByRole('button',{name:'Подсказка',exact:true}).click();await page.getByRole('button',{name:'Вспомнил',exact:true}).click();
  await page.getByRole('tab',{name:'Ir a + infinitivo',exact:false}).click();
  await expect(page.getByRole('tabpanel')).toContainText('пока нет примера');
  await page.getByRole('tabpanel').getByRole('button',{name:'Добавить пример',exact:true}).click();

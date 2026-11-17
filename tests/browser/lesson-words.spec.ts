@@ -46,7 +46,7 @@ test('a student sees live lesson vocabulary on a phone and can practice even the
     await expect(student.locator('.lesson-word-row')).toHaveCount(1);await expect(student.getByRole('button',{name:'Добавить слово',exact:true})).toHaveCount(0);
     await expect(student.getByRole('button',{name:'Редактировать la puerta',exact:true})).toHaveCount(0);
     await student.getByRole('button',{name:'Тренировать слова урока',exact:true}).click();await student.getByRole('button',{name:'Начать тренировку',exact:true}).click();
-    await student.getByRole('textbox',{name:'Перевод на русский',exact:true}).fill('дверь');await student.getByRole('button',{name:'Проверить перевод',exact:true}).click();
+    await student.getByRole('button',{name:'Подсказка',exact:true}).click();await student.getByRole('button',{name:'Вспомнил',exact:true}).click();
     await expect(student.locator('.answer-feedback')).toContainText('¡Muy bien!');
     await student.getByRole('button',{name:'Открыть меню'}).click();await student.getByRole('link',{name:'Слова',exact:true}).click();
     const added=await page.request.post('/api/lesson-words',{headers:{'X-Student-Id':result.student.id},data:{date:'2026-11-17',lessonId:own.lessons[0].id,text:'la ventana — окно',topic:'Дом'}});expect(added.ok()).toBe(true);

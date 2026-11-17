@@ -1,3 +1,4 @@
+import {studyMaterial,materialGuidance} from './study-material.js';
 import express from 'express';
 import {miroBoardId,readMiroBoard} from './miro.js';
 import {wordExample,levelGuidance} from './word-example.js';
@@ -84,7 +85,7 @@ export function createApp(store:Store) {
   // Enforce permissions on the server, including requests made outside the interface.
   app.use('/api',(req,res,next)=>{
     if((res.locals.principal as Principal).role==='teacher'||['GET','HEAD','OPTIONS'].includes(req.method)){next();return;}
-    const permitted=(req.method==='POST'&&['/lingva/start','/lingva/answer','/review','/verbs/review','/diary','/listening/review','/ai/speech','/ai/dialog','/ai/listening','/import/pdf','/import/cards/preview','/import/cards/confirm'].includes(req.path))
+    const permitted=(req.method==='POST'&&['/lingva/start','/lingva/answer','/review','/review/self','/verbs/review','/diary','/listening/review','/ai/speech','/ai/dialog','/ai/listening','/import/pdf','/import/cards/preview','/import/cards/confirm'].includes(req.path))
       ||(req.method==='POST'&&/^\/ai\/cards\/[^/]+\/word-example$/.test(req.path))
       ||(req.method==='PATCH'&&/^\/assignments\/[^/]+$/.test(req.path));
     if(req.method==='PATCH'&&/^\/cards\/[^/]+$/.test(req.path)){
@@ -109,6 +110,10 @@ export function createApp(store:Store) {
     const input=z.object({tense:exampleTense,es:str,ru:str}).parse(req.body);
     store.mutate(s=>{const card=find(s.cards,req.params.id);const index=card.examples.findIndex(e=>resolveExampleTense(e.tense)===input.tense);if(index===-1)card.examples.push(input);else card.examples[index]=input;});
     res.json({ok:true});
+  });
+  app.post('/api/review/self',(req,res)=>{
+    const p=z.object({cardId:str,correct:z.boolean(),attemptId:z.uuid(),seconds}).parse(req.body);
+    res.json(store.mutate(s=>{const c=find(s.cards,p.cardId);if(!c.enabled)throw new AppError(400,'Карточка выключена.');const key='self:'+p.attemptId,previous=s.attempts.find(a=>a.id===key);if(previous){if(previous.cardId!==c.id||previous.correct!==p.correct)throw new AppError(409,'Этот ответ уже сохранён.');return {correct:previous.correct,card:c};}review(c,p.correct);s.attempts.push({id:key,kind:'card',at:new Date().toISOString(),correct:p.correct,seconds:p.seconds,cardId:c.id,topic:c.topic,answer:p.correct?'Вспомнил':'Не вспомнил'});return {correct:p.correct,card:c};}));
   });
   app.post('/api/review',(req,res)=>{
     const p=z.object({cardId:str,answer:str,seconds}).parse(req.body);
@@ -145,12 +150,12 @@ export function createApp(store:Store) {
     const saved=card.examples.find(example=>!example.level||example.level===level);if(saved){res.json(saved);return;}
     const key=res.locals.studentId+':'+card.id+':'+level;
     let promise=pendingExamples.get(key);
-    if(!promise){promise=(async()=>{const example=await wordExample(card,level);store.mutate(current=>{const target=find(current.cards,card.id);if(current.plan.level!==level||target.es!==card.es||target.ru!==card.ru)throw new AppError(409,'Уровень или слово изменились. Откройте слово заново.');if(!target.examples.some(item=>item.level===level))target.examples.push(example);});return example;})();pendingExamples.set(key,promise);}
+    if(!promise){promise=(async()=>{const example=await wordExample(card,level,claude,studyMaterial(state));store.mutate(current=>{const target=find(current.cards,card.id);if(current.plan.level!==level||target.es!==card.es||target.ru!==card.ru)throw new AppError(409,'Уровень или слово изменились. Откройте слово заново.');if(!target.examples.some(item=>item.level===level))target.examples.push(example);});return example;})();pendingExamples.set(key,promise);}
     try{res.json(await promise);}finally{if(pendingExamples.get(key)===promise)pendingExamples.delete(key);}
   });
   app.post('/api/ai/cards/:id/examples',async(req,res)=>{
     const initial=store.read(),level=initial.plan.level,card=find(initial.cards,req.params.id);
-    const raw=await claude(studentPrompt()+' Создай 6 естественных коротких примеров именно с данным словом/фразой и его формами. Верни только JSON-массив [{tense,es,ru}]. Обязательно по одному примеру для ключей: presente, futuro_proximo (только ir a + infinitivo), gerundio_presente (estar + gerundio), perfecto, indefinido, imperfecto. Для существительного меняется время предложения, существительное не спрягай. Для состояний не придумывай неестественное estoy estando: покажи слово в контексте с естественным действием прямо сейчас. Не меняй значение слова, учитывай материалы. Переводи весь пример на русский.',JSON.stringify({es:card.es,ru:card.ru,topic:card.topic,examples:card.examples}));
+    const raw=await claude(studentPrompt()+materialGuidance+' Создай 6 естественных коротких примеров именно с данным словом/фразой и его формами. Верни только JSON-массив [{tense,es,ru}]. Обязательно по одному примеру для ключей: presente, futuro_proximo (только ir a + infinitivo), gerundio_presente (estar + gerundio), perfecto, indefinido, imperfecto. Для существительного меняется время предложения, существительное не спрягай. Для состояний не придумывай неестественное estoy estando: покажи слово в контексте с естественным действием прямо сейчас. Не меняй значение слова, учитывай материалы. Переводи весь пример на русский.',JSON.stringify({es:card.es,ru:card.ru,topic:card.topic,examples:card.examples,studyMaterial:studyMaterial(initial)}));
     const examples=z.array(z.object({tense:exampleTense,es:str,ru:str})).length(6).parse(aiJSON(raw));
     if(new Set(examples.map(e=>e.tense)).size!==6)throw new AppError(502,'ИИ не подготовил все шесть времён. Попробуйте ещё раз.');
     store.mutate(s=>{const current=find(s.cards,req.params.id);if(s.plan.level!==level)throw new AppError(409,'Уровень изменился. Повторите запрос.');const saved=new Set(current.examples.filter(e=>!e.level||e.level===level).map(e=>resolveExampleTense(e.tense)));current.examples.push(...examples.filter(e=>!saved.has(e.tense)).map(e=>({...e,level})));});

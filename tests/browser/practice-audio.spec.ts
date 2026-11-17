@@ -20,82 +20,54 @@ async function observeAudio(page:Page){
   });
 }
 const audit=(page:Page)=>page.evaluate(()=>(window as unknown as {audioAudit:{spoken:{text:string;lang:string;rate:number}[];cancelled:number;tones:{frequency:number;type:string;state:string}[]}}).audioAudit);
-async function cardAnswer(page:Page){
-  const word=await page.locator('.flashcard-word h2').innerText();
-  const {state}=await (await page.request.get('/api/state')).json();
-  return state.cards.find((c:{es:string})=>c.es===word).ru as string;
-}
-const choose=(page:Page,answer:string)=>page.getByRole('button',{name:answer,exact:false}).filter({has:page.locator('.option-letter')}).click();
 
-test('new cards speak once, verified answers get distinct sounds, and mute preferences survive reload',async({page})=>{
-  await observeAudio(page);await page.setViewportSize({width:1440,height:1100});await page.goto('/#cards');
-  await expect(page.getByRole('switch',{name:'Автоозвучка слов'})).toBeChecked();
-  await expect(page.getByRole('switch',{name:'Звуки ответов'})).toBeChecked();
-  expect((await audit(page)).spoken).toHaveLength(0);
-  await page.getByRole('button',{name:'Начать тренировку',exact:true}).click();
-  const first=await page.locator('.flashcard-word h2').innerText();
-  expect((await audit(page)).spoken.map(({text,lang})=>({text,lang}))).toEqual([{text:first,lang:'es-ES'}]);
-  expect((await audit(page)).spoken[0].rate).toBeCloseTo(0.9);
-  const option=page.locator('.answer-options button').first();
-  expect(await option.evaluate(e=>parseFloat(getComputedStyle(e).fontSize))).toBeGreaterThanOrEqual(20);
-  expect((await option.boundingBox())!.height).toBeGreaterThanOrEqual(76);
-  await choose(page,await cardAnswer(page));
-  await expect(page.getByRole('status').filter({hasText:'¡Muy bien!'})).toBeVisible();
-  await expect.poll(async()=>(await audit(page)).tones.length).toBe(2);
-  expect((await audit(page)).tones.map(t=>t.frequency)).toEqual([659.25,880]);
-  expect((await audit(page)).tones.every(t=>t.state==='running')).toBe(true);
-  await page.getByRole('button',{name:'Следующая фраза',exact:false}).click();
-  const second=await page.locator('.flashcard-word h2').innerText();
-  expect((await audit(page)).spoken.map(s=>s.text)).toEqual([first,second]);
-  const right=await cardAnswer(page);
-  const translations=await page.locator('.answer-options button').evaluateAll(buttons=>buttons.map(b=>b.querySelectorAll('span')[1].textContent!));
-  await choose(page,translations.find(t=>t!==right)!);
-  await expect(page.getByRole('status').filter({hasText:'Ничего страшного'})).toBeVisible();
-  await expect.poll(async()=>(await audit(page)).tones.length).toBe(4);
-  expect((await audit(page)).tones.slice(2).map(t=>t.frequency)).toEqual([220,164.81]);
-  expect((await audit(page)).tones.slice(2).every(t=>t.type==='triangle')).toBe(true);
-  await page.getByRole('switch',{name:'Звуки ответов'}).click();
-  await page.getByRole('button',{name:'Следующая фраза',exact:false}).click();
-  await choose(page,await cardAnswer(page));
-  await expect(page.getByRole('status').filter({hasText:'¡Muy bien!'})).toBeVisible();
-  expect((await audit(page)).tones).toHaveLength(4);
-  await page.getByRole('switch',{name:'Автоозвучка слов'}).click();
-  const spoken=(await audit(page)).spoken.length;
-  await page.getByRole('button',{name:'Следующая фраза',exact:false}).click();
-  expect((await audit(page)).spoken).toHaveLength(spoken);
-  await page.locator('.flashcard-word').getByRole('button',{name:'Озвучить медленно',exact:true}).click();
-  expect((await audit(page)).spoken.at(-1)?.rate).toBeCloseTo(0.65);
-  await page.reload();
-  await expect(page.getByRole('switch',{name:'Автоозвучка слов'})).not.toBeChecked();
-  await expect(page.getByRole('switch',{name:'Звуки ответов'})).not.toBeChecked();
-  await page.getByRole('button',{name:'Начать тренировку',exact:true}).click();
-  expect((await audit(page)).spoken).toHaveLength(0);
-  await page.getByRole('switch',{name:'Автоозвучка слов'}).click();
-  expect((await audit(page)).spoken).toHaveLength(1);
-  const cancelled=(await audit(page)).cancelled;
-  await page.getByRole('button',{name:'Закончить сейчас',exact:true}).click();
-  expect((await audit(page)).cancelled).toBeGreaterThan(cancelled);
+const hint=(page:Page)=>page.getByRole('button',{name:'Подсказка',exact:true}).click();
+const grade=(page:Page,correct=true)=>page.getByRole('button',{name:correct?'Вспомнил':'Не вспомнил',exact:true}).click();
+test('recall stays silent until hint, grades schedule SRS, and a known word reads its saved example after the signal',async({page})=>{
+ await observeAudio(page);await page.setViewportSize({width:1440,height:1100});await page.goto('/#cards');
+ await page.getByRole('button',{name:'Начать тренировку',exact:true}).click();
+ const first=await page.locator('.flashcard-word h2').innerText();
+ expect((await audit(page)).spoken).toHaveLength(0);await expect(page.locator('.recall-translation')).toHaveCount(0);
+ await expect(page.getByRole('button',{name:'Вспомнил',exact:true})).toHaveCount(0);
+ const before=(await (await page.request.get('/api/state')).json()).state;const card=before.cards.find((c:{es:string})=>c.es===first);
+ await hint(page);await expect(page.locator('.recall-translation')).toHaveText(card.ru);
+ expect((await audit(page)).spoken.map(s=>s.text)).toEqual([first]);
+ expect((await audit(page)).spoken[0].lang).toBe('es-ES');
+ expect((await audit(page)).tones).toHaveLength(0);
+ await grade(page);await expect(page.locator('.answer-feedback')).toContainText('Поздравляем');
+ await expect.poll(async()=>(await audit(page)).tones.length).toBe(2);
+ expect((await audit(page)).tones.map(t=>t.frequency)).toEqual([659.25,880]);
+ await expect.poll(async()=>(await audit(page)).spoken.at(-1)?.text).toBe(card.examples[0].es);
+ const state=(await (await page.request.get('/api/state')).json()).state;const updated=state.cards.find((c:{id:string})=>c.id===card.id);
+ expect(updated.stage).toBe(card.stage+1);expect(Date.parse(updated.due)-Date.now()).toBeGreaterThan(23*3600000);
+ await page.getByRole('button',{name:'Следующая фраза',exact:false}).click();
+ const spoken=(await audit(page)).spoken.length;await page.waitForTimeout(550);expect((await audit(page)).spoken).toHaveLength(spoken);
+ const second=await page.locator('.flashcard-word h2').innerText();await hint(page);await grade(page,false);
+ await expect(page.locator('.answer-feedback')).toContainText('10 минут');
+ await expect.poll(async()=>(await audit(page)).tones.length).toBe(4);
+ expect((await audit(page)).tones.slice(2).map(t=>t.frequency)).toEqual([220,164.81]);
+ await page.waitForTimeout(550);expect((await audit(page)).spoken.at(-1)?.text).toBe(second);
+ const after=(await (await page.request.get('/api/state')).json()).state;const failed=after.cards.find((c:{es:string})=>c.es===second);expect(failed.stage).toBe(0);expect(Date.parse(failed.due)-Date.now()).toBeLessThanOrEqual(600000);
+ await page.getByRole('switch',{name:'Звуки ответов'}).click();await page.getByRole('switch',{name:'Автоозвучка слов'}).click();
+ await page.getByRole('button',{name:'Следующая фраза',exact:false}).click();const count=(await audit(page)).spoken.length;await hint(page);await grade(page);
+ await expect(page.locator('.answer-feedback')).toContainText('Поздравляем');await page.waitForTimeout(650);
+ expect((await audit(page)).spoken).toHaveLength(count);expect((await audit(page)).tones).toHaveLength(4);
+ await page.locator('.flashcard-word').getByRole('button',{name:'Озвучить медленно',exact:true}).click();expect((await audit(page)).spoken.at(-1)?.rate).toBeCloseTo(0.65);
+ await page.reload();await expect(page.getByRole('switch',{name:'Автоозвучка слов'})).not.toBeChecked();await expect(page.getByRole('switch',{name:'Звуки ответов'})).not.toBeChecked();
 });
-
-test('a failed request never plays an incorrect-answer signal',async({page})=>{
-  await observeAudio(page);await page.goto('/#cards');await page.getByRole('button',{name:'Начать тренировку',exact:true}).click();
-  await page.route('**/api/review',route=>route.fulfill({status:503,contentType:'application/json',body:JSON.stringify({error:'Проверка временно недоступна'})}));
-  const answer=await cardAnswer(page);await choose(page,answer);
-  await expect(page.getByRole('status').filter({hasText:'Проверка временно недоступна'})).toBeVisible();
-  expect((await audit(page)).tones).toHaveLength(0);
-  await expect(page.locator('.answer-options button').first()).toBeEnabled();
-  await page.unroute('**/api/review');await choose(page,answer);
-  await expect(page.getByRole('status').filter({hasText:'¡Muy bien!'})).toBeVisible();
-  await expect.poll(async()=>(await audit(page)).tones.length).toBe(2);
+test('a failed self-review request produces no signal or example and lets the learner retry',async({page})=>{
+ await observeAudio(page);await page.goto('/#cards');await page.getByRole('button',{name:'Начать тренировку',exact:true}).click();await hint(page);
+ await page.route('**/api/review/self',route=>route.fulfill({status:503,json:{error:'Сохранение временно недоступно'}}));await grade(page);
+ await expect(page.getByRole('status').filter({hasText:'Сохранение временно недоступно'})).toBeVisible();expect((await audit(page)).tones).toHaveLength(0);
+ await expect(page.getByRole('button',{name:'Вспомнил',exact:true})).toBeEnabled();await page.unroute('**/api/review/self');await grade(page);
+ await expect(page.locator('.answer-feedback')).toContainText('Поздравляем');await expect.poll(async()=>(await audit(page)).tones.length).toBe(2);
 });
-
-test('large study text and controls remain readable on a phone',async({page})=>{
-  await observeAudio(page);await page.setViewportSize({width:390,height:844});await page.goto('/#cards');
-  await page.getByRole('button',{name:'Начать тренировку',exact:true}).click();
-  const option=page.locator('.answer-options button').first();
-  expect(await option.evaluate(e=>parseFloat(getComputedStyle(e).fontSize))).toBeGreaterThanOrEqual(18);
-  expect(await page.locator('.flashcard-word h2').evaluate(e=>parseFloat(getComputedStyle(e).fontSize))).toBeGreaterThanOrEqual(40);
-  expect((await option.boundingBox())!.height).toBeGreaterThanOrEqual(76);
-  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
-  await page.screenshot({path:'test-results/readable-practice-mobile.png',fullPage:true,animations:'disabled'});
+test('a new question cancels the pending example and mobile recall controls stay readable',async({page})=>{
+ await observeAudio(page);await page.setViewportSize({width:390,height:844});await page.goto('/#cards');await page.getByRole('button',{name:'Начать тренировку',exact:true}).click();
+ await hint(page);const button=page.getByRole('button',{name:'Вспомнил',exact:true});expect((await button.boundingBox())!.height).toBeGreaterThanOrEqual(76);
+ expect(await page.locator('.flashcard-word h2').evaluate(e=>parseFloat(getComputedStyle(e).fontSize))).toBeGreaterThanOrEqual(40);
+ await grade(page);await expect(page.locator('.answer-feedback')).toBeVisible();await page.getByRole('button',{name:'Следующая фраза',exact:false}).click();
+ const spoken=(await audit(page)).spoken.length;await page.waitForTimeout(650);expect((await audit(page)).spoken).toHaveLength(spoken);
+ expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+ await page.screenshot({path:'test-results/recall-mobile.png',fullPage:true,animations:'disabled'});
 });

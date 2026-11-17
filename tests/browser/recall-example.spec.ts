@@ -1,0 +1,20 @@
+import {test,expect} from '@playwright/test';
+test('known recall uses a level-specific saved example, generates a missing one once and reuses it next time',async({page})=>{
+ const spoken:string[]=[];
+ await page.exposeFunction('recordRecallSpeech',(text:string)=>spoken.push(text));
+ await page.addInitScript(()=>{Object.defineProperty(window,'speechSynthesis',{configurable:true,value:{getVoices:()=>[],cancel:()=>{},speak:(utterance:SpeechSynthesisUtterance)=>{void (window as unknown as {recordRecallSpeech:(text:string)=>Promise<void>}).recordRecallSpeech(utterance.text);}}});});
+ const response=await page.request.post('/api/cards',{data:{es:'tener bastante cuidado con',ru:'быть очень осторожным с',topic:'Recall: example fixture',source:'Урок ученика',examples:[]}});expect(response.ok()).toBe(true);const card=await response.json();
+ const own=(await (await page.request.get('/api/state')).json()).state;
+ const example={es:'Tengo bastante cuidado con la puerta.',ru:'Я очень осторожен с дверью.',level:own.plan.level,tense:'presente'};let calls=0;
+ await page.route('**/api/state',async route=>{const response=await route.fetch();const data=await response.json();data.meta.ai=true;await route.fulfill({json:data});});
+ await page.route('**/api/ai/cards/'+card.id+'/word-example',async route=>{calls++;const saved=await page.request.patch('/api/cards/'+card.id,{data:{examples:[example]}});expect(saved.ok()).toBe(true);await route.fulfill({json:example});});
+ await page.goto('/#cards');await page.getByRole('combobox',{name:'Выберите тему'}).selectOption('Recall: example fixture');
+ await page.getByRole('button',{name:'Начать тренировку',exact:true}).click();expect(spoken).toHaveLength(0);
+ await page.getByRole('button',{name:'Подсказка',exact:true}).click();await expect(page.locator('.recall-translation')).toHaveText(card.ru);
+ await page.screenshot({path:'test-results/recall-hint-desktop.png',fullPage:true,animations:'disabled'});
+ await page.getByRole('button',{name:'Вспомнил',exact:true}).click();await expect(page.locator('.tense-example')).toContainText(example.es);
+ await expect.poll(()=>spoken.at(-1)).toBe(example.es);expect(calls).toBe(1);
+ await page.screenshot({path:'test-results/recall-success-desktop.png',fullPage:true,animations:'disabled'});
+ await page.getByRole('button',{name:'Закончить сейчас',exact:true}).click();await page.getByRole('button',{name:'Все фразы',exact:true}).click();await page.getByRole('button',{name:'Начать тренировку',exact:true}).click();
+ await page.getByRole('button',{name:'Подсказка',exact:true}).click();await page.getByRole('button',{name:'Вспомнил',exact:true}).click();await expect(page.locator('.tense-example')).toContainText(example.es);expect(calls).toBe(1);
+});

@@ -28,7 +28,7 @@ test('teacher creates private student spaces; a student signs in, practices and 
     await student.getByRole('button',{name:'Начать тренировку',exact:true}).click();
     const own=(await (await student.request.get('/api/state')).json()).state;
     const word=await student.locator('.flashcard-word h2').innerText(),card=own.cards.find((item:{es:string})=>item.es===word);
-    await student.locator('.answer-options button').filter({hasText:card.ru}).click();
+    await student.getByRole('button',{name:'Подсказка',exact:true}).click();await student.getByRole('button',{name:'Вспомнил',exact:true}).click();
     await expect(student.locator('.answer-feedback')).toBeVisible();
     const mariaState=(await (await page.request.get('/api/state',{headers:{'X-Student-Id':maria.id}})).json()).state;
     const pavelState=(await (await page.request.get('/api/state',{headers:{'X-Student-Id':pavel.id}})).json()).state;

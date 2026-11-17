@@ -1,4 +1,4 @@
-import {useEffect,useId,useState} from 'react';
+import {useEffect,useId,useRef,useState} from 'react';
 import {BookOpen,ChevronLeft,ChevronRight,PenLine,Sparkles} from 'lucide-react';
 import {speak} from './api';
 import {useApp} from './context';
@@ -8,20 +8,24 @@ import {Badge,Button,Empty,Field,Modal,Panel,Sound} from './ui';
 const tenses=Object.keys(exampleTenseNames) as ExampleTense[];
 const people=['yo','tú','él / ella','nosotros','vosotros','ellos / ellas'];
 
-export function CardContext({card,revealed}:{card:Card;revealed:boolean}){
+export function CardContext({card,revealed,autoRead=false,onExample}:{card:Card;revealed:boolean;autoRead?:boolean;onExample?:(text:string)=>void}){
   const {api,state,meta,run,notify}=useApp();
   const [selected,setSelected]=useState<ExampleTense>('presente');
   const [data,setData]=useState<CardContextData|null>(null);
   const [loading,setLoading]=useState(false),[error,setError]=useState(''),[editing,setEditing]=useState(false),[generating,setGenerating]=useState(false);
-  const prefix=useId();
+  const prefix=useId(),played=useRef(false),reader=useRef(onExample);reader.current=onExample;
   const examplesKey=JSON.stringify(card.examples),tablesKey=JSON.stringify(state.verbTables);
   useEffect(()=>{
     if(!revealed)return;
     let cancelled=false;
     setLoading(true);setError('');
-    api<CardContextData>('/cards/'+encodeURIComponent(card.id)+'/context').then(result=>{if(!cancelled)setData(result);}).catch(e=>{if(!cancelled)setError((e as Error).message);}).finally(()=>{if(!cancelled)setLoading(false);});
+    (async()=>{let result=await api<CardContextData>('/cards/'+encodeURIComponent(card.id)+'/context');if(cancelled)return;
+      if(autoRead&&meta.ai&&!result.originalExamples.length&&!result.examples.some(e=>e.origin==='card')){await api('/ai/cards/'+encodeURIComponent(card.id)+'/word-example',{});if(cancelled)return;result=await api<CardContextData>('/cards/'+encodeURIComponent(card.id)+'/context');}
+      if(!cancelled){setData(result);const own=result.examples.find(e=>e.origin==='card');if(own&&!played.current)setSelected(own.tense);}
+    })().catch(e=>{if(!cancelled)setError((e as Error).message);}).finally(()=>{if(!cancelled)setLoading(false);});
     return()=>{cancelled=true;};
-  },[card.id,revealed,examplesKey,tablesKey]);
+  },[card.id,revealed,examplesKey,tablesKey,autoRead,meta.ai]);
+  useEffect(()=>{if(!revealed||!autoRead||!data||played.current)return;const example=data.examples.find(e=>e.origin==='card')||data.originalExamples[0];if(example){played.current=true;reader.current?.(example.es);}},[data,revealed,autoRead]);
   const index=tenses.indexOf(selected),active=data?.examples.filter(e=>e.tense===selected)||[];
   function move(offset:number,focus=false){
     const next=tenses[(index+offset+tenses.length)%tenses.length];setSelected(next);
@@ -30,13 +34,14 @@ export function CardContext({card,revealed}:{card:Card;revealed:boolean}){
   return <Panel className="tense-context">
     <div className="section-heading"><div><div className="eyebrow">ОДНО СЛОВО · РАЗНЫЕ СИТУАЦИИ</div><h2>Слово в разных временах</h2></div><BookOpen size={21}/></div>
     {!revealed?<Empty>Сначала попробуйте ответить. После ответа откроются шесть вкладок с примерами.</Empty>:<>
+      {!!data?.originalExamples.length&&<div className="recall-example"><Badge gold>Пример из вашего материала</Badge><div className="tense-sentence"><p lang="es">{data.originalExamples[0].es}</p><Sound text={data.originalExamples[0].es} notify={notify}/></div><p className="tense-translation">{data.originalExamples[0].ru}</p></div>}
       <div className="tense-tabs" role="tablist" aria-label="Времена примеров" onKeyDown={e=>{
         if(e.key==='ArrowRight'||e.key==='ArrowLeft'){e.preventDefault();move(e.key==='ArrowRight'?1:-1,true);}
         if(e.key==='Home'||e.key==='End'){e.preventDefault();const tense=e.key==='Home'?tenses[0]:tenses.at(-1)!;setSelected(tense);document.getElementById(prefix+'-'+tense)?.focus();}
       }}>{tenses.map((tense,i)=><button key={tense} id={prefix+'-'+tense} role="tab" aria-selected={selected===tense} aria-controls={prefix+'-panel'} tabIndex={selected===tense?0:-1} className={'tense-tab tone-'+i} onClick={()=>setSelected(tense)}><span>{i+1}</span>{exampleTenseNames[tense]}</button>)}</div>
       <div className="tense-example-panel" role="tabpanel" id={prefix+'-panel'} aria-labelledby={prefix+'-'+selected} aria-busy={loading}>
         <div className="tense-example-heading"><div><Badge gold>{exampleTenseDescriptions[selected]}</Badge><h3>{exampleTenseNames[selected]}</h3></div><div className="tense-arrows"><button className="icon-btn" aria-label="Предыдущее время" onClick={()=>move(-1)}><ChevronLeft size={21}/></button><button className="icon-btn" aria-label="Следующее время" onClick={()=>move(1)}><ChevronRight size={21}/></button></div></div>
-        {loading?<p className="empty" role="status">Открываем примеры…</p>:error?<p className="form-error" role="alert">{error}</p>:<>
+        {loading?<p className="empty" role="status">Открываем пример из вашего материала…</p>:error?<p className="form-error" role="alert">{error}</p>:<>
           {active.length?active.map((example,i)=><div className="example tense-example" key={i}>
             <div className="tense-sentence"><p lang="es">{example.es}</p><Sound text={example.es} notify={notify}/></div>
             <p className="tense-translation">{example.ru}</p>
