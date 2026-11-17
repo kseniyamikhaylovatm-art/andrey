@@ -47,12 +47,7 @@ export function review(card: Card, correct: boolean, now = new Date()): void {
   card.stage = correct ? Math.min(card.stage+1,6) : 0;
   card.due = new Date(+now + (correct ? [0,1,2,4,8,16,32][card.stage]*86400000 : 600000)).toISOString();
 }
-export function paymentBalance(s: AppState) {
-  const dates = s.payments.map(p=>p.date).sort();
-  const first = dates[0];
-  const held = first ? s.lessons.filter(l=>l.status==='held'&&l.date>=first).length : s.lessons.filter(l=>l.status==='held').length;
-  return { paid:dates.length*12,used:held,remaining:dates.length*12-held,last:dates.at(-1)||null };
-}
+export {paymentBalance} from '../src/payment-balance.js';
 export function localSummary(s: AppState) {
   const recent=s.attempts.filter(a=>Date.now()-Date.parse(a.at)<7*86400000);
   const scored=recent.filter(a=>a.correct!==null);

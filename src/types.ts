@@ -47,10 +47,13 @@ export interface AudioItem { id: string; title: string; url: string; transcript:
 export interface Plan { miroBoardUrl?:string; level: string; goal: string; goals: { skill: string; now: string; target: string }[]; criteria: string[]; topics: string[] }
 export interface AppState {
   cards: Card[]; attempts: Attempt[]; lessons: Lesson[]; assignments: Assignment[]; diary: Diary[];
-  speeches: SpeechRecord[]; dialogs: Dialog[]; audios: AudioItem[]; payments: { id: string; date: string }[];
+  speeches: SpeechRecord[]; dialogs: Dialog[]; audios: AudioItem[]; payments: Payment[];
   plan: Plan; verbTables: Record<string, Partial<Record<Tense, string[]>>>;
   summary: { text: string; date: string } | null;
 }
-export interface StudentProfile {id:string;name:string;createdAt:string;level:string;cards:number;attempts:number;lastPractice:string|null;miroBoardUrl?:string}
+export interface StudentProfile {id:string;name:string;createdAt:string;level:string;cards:number;attempts:number;lastPractice:string|null;miroBoardUrl?:string;payment?:PaymentSummary}
 export interface AccessSession {authenticated:boolean;protected:boolean;teacherConfigured:boolean;demo?:boolean;role?:'teacher'|'student';studentId?:string}
 export interface WorkspaceMeta {ai:boolean;protected:boolean;verbs:string[];demo?:boolean;miro?:boolean;role:'teacher'|'student';student:StudentProfile}
+
+export interface Payment {id:string;date:string;lessons?:number;note?:string}
+export interface PaymentSummary {paid:number;used:number;remaining:number;last:string|null}

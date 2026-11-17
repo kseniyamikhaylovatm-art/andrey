@@ -7,11 +7,11 @@ import { Badge, Button, Field, Modal } from './ui';
 interface Pair { es: string; ru: string; line: number }
 interface Preview { cards: Pair[]; issues: { line: number; text: string; reason: string }[] }
 
-export function CardImportModal({ close }: { close: () => void }) {
+export function CardImportModal({ close,topicMode=false,back }: { close: () => void;topicMode?:boolean;back?:()=>void }) {
   const {api,uploadPdf, state, refresh, notify }=useApp();
   const [text, setText] = useState('');
-  const [source, setSource] = useState('Список карточек');
-  const [topic, setTopic] = useState('Повседневное');
+  const [source, setSource] = useState(topicMode?'Тематический словарь':'Список карточек');
+  const [topic, setTopic] = useState(topicMode?'':'Повседневное');
   const [preview, setPreview] = useState<Preview | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -42,19 +42,21 @@ export function CardImportModal({ close }: { close: () => void }) {
     finally { setBusy(false); }
   }
   const invalid = preview?.cards.some(c => !c.es.trim() || !c.ru.trim() || c.es.length > 4000 || c.ru.length > 4000);
-  return <Modal title="Загрузить PDF карточек" close={close} wide>
+  return <Modal title={topicMode?'Слова в базу · списком по теме':'Загрузить PDF карточек'} close={()=>!busy&&close()} wide>
     <div className="form">
-      <div className="notice"><FileText size={20}/><span>Все карточки из одного файла. Каждая строка: <strong>испанское слово — русский перевод</strong>. Работает без ИИ.</span></div>
-      <label className="upload-area">
+      {topicMode&&back&&<div className="pills"><button type="button" disabled={busy} onClick={back}>По одному</button><button type="button" className="active" disabled={busy}>Списком по теме</button></div>}
+      {topicMode&&<p className="small muted">Одна загрузка — одна тема. Выберите тему и вставьте по одной паре «испанское — русский» на строку. Слова попадут в базу и тренировки, без даты урока. Работает без ИИ.</p>}
+      {!topicMode&&<div className="notice"><FileText size={20}/><span>Все карточки из одного файла. Каждая строка: <strong>испанское слово — русский перевод</strong>. Работает без ИИ.</span></div>}
+      {!topicMode&&<label className="upload-area">
         <Upload size={30}/><strong>{busy ? 'Читаем список…' : 'Выберите PDF карточек'}</strong>
         <span>Текстовый PDF · до 15 МБ · до 1000 карточек за один раз</span>
         <input aria-label="Выберите PDF карточек" type="file" accept="application/pdf,.pdf" disabled={busy} onChange={e => { const f = e.target.files?.[0]; if (f) void upload(f); e.target.value = ''; }}/>
-      </label>
-      <div className="form-row">
-        <Field label="Источник или название списка"><input value={source} disabled={busy} onChange={e => setSource(e.target.value)} required maxLength={4000}/></Field>
-        <Field label="Тема для всех карточек"><input value={topic} disabled={busy} onChange={e => setTopic(e.target.value)} required maxLength={4000} list="card-import-topics"/><datalist id="card-import-topics">{state.plan.topics.map(t => <option key={t} value={t}/>)}</datalist></Field>
+      </label>}
+      <div className={topicMode?'':'form-row'}>
+        {!topicMode&&<Field label="Источник или название списка"><input value={source} disabled={busy} onChange={e => setSource(e.target.value)} required maxLength={4000}/></Field>}
+        <Field label={topicMode?'Тема':'Тема для всех карточек'}><input value={topic} disabled={busy} onChange={e => setTopic(e.target.value)} required maxLength={4000} list="card-import-topics"/><datalist id="card-import-topics">{state.plan.topics.map(t => <option key={t} value={t}/>)}</datalist></Field>
       </div>
-      <Field label="Список карточек · можно вставить текст или исправить строки из PDF">
+      <Field label={topicMode?'Список слов по теме':'Список карточек · можно вставить текст или исправить строки из PDF'}>
         <textarea rows={6} value={text} disabled={busy} maxLength={200000} placeholder={'la casa — дом\nel vecino — сосед\nhacer la compra — покупать продукты'} onChange={e => { setText(e.target.value); setPreview(null); setDone(null); setError(''); }}/>
       </Field>
       <Button secondary disabled={busy || !text.trim() || text.length > 200000} onClick={() => void parse(text)}>{busy ? 'Разбираем…' : 'Проверить список'}</Button>
@@ -84,7 +86,7 @@ export function CardImportModal({ close }: { close: () => void }) {
           finally { setBusy(false); }
         }}><Check size={17}/>{busy ? 'Сохраняем…' : 'Добавить все карточки'}</Button>
       </>}
-      {done && <div className="notice" role="status"><Check size={20}/><span>Готово! Добавлено: <strong>{done.added}</strong>. Повторов пропущено: <strong>{done.duplicates}</strong>. Карточки доступны в «Автоматизация → База фраз».</span></div>}
+      {done && <div className="notice" role="status"><Check size={20}/><span>Готово! Добавлено: <strong>{done.added}</strong>. Повторов пропущено: <strong>{done.duplicates}</strong>. Карточки доступны в «Автоматизация → База слов» и в фильтре выбранной темы.</span></div>}
     </div>
   </Modal>;
 }

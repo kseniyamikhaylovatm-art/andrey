@@ -11,7 +11,7 @@ test('study, conjugate, track lessons and retain progress after reload',async({p
  const forms=['hablo','hablas','habla','hablamos','habláis','hablan'];const persons=['yo','tú','él / ella / usted','nosotros / nosotras','vosotros / vosotras','ellos / ellas / ustedes'];
  for(let i=0;i<6;i++)await page.getByRole('textbox',{name:persons[i],exact:true}).fill(forms[i]);
  await page.getByRole('button',{name:'Проверить формы'}).click();await expect(page.getByText('6 из 6 · ¡Perfecto!')).toBeVisible();
- await page.getByRole('link',{name:'Оплата',exact:true}).click();await page.getByRole('button',{name:'Отметить оплату',exact:true}).click();await page.getByRole('button',{name:'Подтвердить оплату'}).click();await expect(page.getByRole('dialog')).toBeHidden();
+ await page.getByRole('link',{name:'Оплата',exact:true}).click();await page.getByRole('button',{name:'Отметить оплату',exact:true}).click();await page.getByRole('spinbutton',{name:'Количество оплаченных уроков'}).fill('12');await page.getByRole('button',{name:'Подтвердить оплату'}).click();await expect(page.getByRole('dialog')).toBeHidden();
  await expect(page.locator('.stat').filter({hasText:'Оплаченных осталось'}).locator('.stat-value')).toHaveText('12');
  await page.getByRole('button',{name:'Добавить',exact:true}).click();await page.getByRole('dialog').getByRole('textbox').first().fill('Разговор о сёрфинге');await page.getByRole('button',{name:'Сохранить урок'}).click();
  await page.getByRole('combobox',{name:'Статус занятия Разговор о сёрфинге'}).selectOption('held');await expect(page.locator('.stat').filter({hasText:'Оплаченных осталось'}).locator('.stat-value')).toHaveText('11');

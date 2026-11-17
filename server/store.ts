@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import {AsyncLocalStorage} from 'node:async_hooks';
 import {randomBytes,createHash} from 'node:crypto';
 import type { AppState,StudentProfile } from '../src/types.js';
-import { initialState } from './domain.js';
+import { initialState,paymentBalance } from './domain.js';
 export class Store {
   db: DatabaseSync;
   private scope=new AsyncLocalStorage<string>();
@@ -39,7 +39,7 @@ export class Store {
   profile(id:string):StudentProfile {
     const student=this.student(id);if(!student)throw new Error('Student does not exist');
     const state=this.withStudent(id,()=>this.read());
-    return {id,miroBoardUrl:state.plan.miroBoardUrl,name:student.name,createdAt:student.created_at,level:state.plan.level,cards:state.cards.length,attempts:state.attempts.length,lastPractice:state.attempts.at(-1)?.at||null};
+    return {id,payment:paymentBalance(state),miroBoardUrl:state.plan.miroBoardUrl,name:student.name,createdAt:student.created_at,level:state.plan.level,cards:state.cards.length,attempts:state.attempts.length,lastPractice:state.attempts.at(-1)?.at||null};
   }
   listStudents():StudentProfile[]{return (this.db.prepare('SELECT id FROM students ORDER BY created_at,id').all() as {id:string}[]).map(row=>this.profile(row.id));}
   createStudent(name:string,level:string,examples=false){

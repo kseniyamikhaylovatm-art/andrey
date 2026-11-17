@@ -33,3 +33,5 @@
 .practice-layout.memory-layout{display:block}
 @media(max-width:600px){.practice-format-grid{grid-template-columns:1fr;max-width:330px}.practice-format-card{aspect-ratio:1;min-height:0;padding:25px}.practice-format-card>strong{font-size:23px}.format-card-description{font-size:15px}.format-card-caption{font-size:13px}}
 .picture-choice:disabled{opacity:1}.practice-navigation>.text-link{flex-shrink:0;white-space:nowrap}
+.student-payment-summary{display:flex;flex-wrap:wrap;gap:8px 18px;padding:14px 0;margin-bottom:18px;border-top:1px solid var(--border);font-size:15px}.student-payment-summary strong{color:var(--navy)}.student-payment-summary .payment-debt,.student-payment-summary .payment-debt strong{color:#a15e4c}.payment-entry-actions{display:flex;align-items:center;gap:20px}.payment-entry>div:first-child{display:flex;flex-direction:column;gap:5px}.payment-entry small{overflow-wrap:anywhere}
+@media(max-width:600px){.payment-entry{align-items:flex-start;gap:14px}.payment-entry-actions{flex-direction:column;align-items:flex-end;gap:12px}.student-payment-summary{font-size:14px;gap:8px 14px}}
