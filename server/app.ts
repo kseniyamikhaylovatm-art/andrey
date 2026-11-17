@@ -1,4 +1,5 @@
 import express from 'express';
+import {LingvaSessions} from './lingva.js';
 import {accessControl,type Principal} from './access.js';
 import { z } from 'zod';
 import { Store } from './store.js';
@@ -29,6 +30,7 @@ function newCard(input:z.infer<typeof cardInput>):Card {return {...input,id:id()
 export function createApp(store:Store) {
   const app=express(); app.disable('x-powered-by');
   const access=accessControl(store);
+  const lingva=new LingvaSessions();
   const studentPrompt=()=>{const {plan}=store.read();return teacherPrompt+' Учебный профиль: '+JSON.stringify({level:plan.level,goal:plan.goal});};
   if(process.env.NODE_ENV==='production')app.set('trust proxy',1);
   app.use((req,res,next)=>{
@@ -78,7 +80,7 @@ export function createApp(store:Store) {
   // Enforce permissions on the server, including requests made outside the interface.
   app.use('/api',(req,res,next)=>{
     if((res.locals.principal as Principal).role==='teacher'||['GET','HEAD','OPTIONS'].includes(req.method)){next();return;}
-    const permitted=(req.method==='POST'&&['/review','/verbs/review','/diary','/listening/review','/ai/speech','/ai/dialog','/ai/listening','/import/pdf','/import/cards/preview','/import/cards/confirm'].includes(req.path))
+    const permitted=(req.method==='POST'&&['/lingva/start','/lingva/answer','/review','/verbs/review','/diary','/listening/review','/ai/speech','/ai/dialog','/ai/listening','/import/pdf','/import/cards/preview','/import/cards/confirm'].includes(req.path))
       ||(req.method==='PATCH'&&/^\/assignments\/[^/]+$/.test(req.path));
     if(req.method==='PATCH'&&/^\/cards\/[^/]+$/.test(req.path)){
       req.body=z.object({focused:z.boolean()}).strict().parse(req.body);next();return;
@@ -88,6 +90,8 @@ export function createApp(store:Store) {
   });
   app.get('/api/state',(_req,res)=>res.json({state:store.read(),meta:{ai:aiReady(),protected:access.session(res.locals.principal).protected,verbs:knownVerbs,demo:process.env.DEMO_MODE==='true',role:(res.locals.principal as Principal).role,student:store.profile(res.locals.studentId)}}));
   app.get('/api/export',(_req,res)=>{res.setHeader('Content-Disposition','attachment; filename="mi-espanol-backup.json"');res.json({version:2,exportedAt:new Date().toISOString(),student:store.profile(res.locals.studentId),state:store.read()});});
+  app.post('/api/lingva/start',(req,res)=>{const p=z.object({topic:z.string().max(4000).optional(),lessonId:z.string().max(100).optional()}).parse(req.body);res.json(lingva.start(res.locals.studentId,store.read(),p.topic,p.lessonId));});
+  app.post('/api/lingva/answer',(req,res)=>{const p=z.object({id:z.string().max(100),index:z.number().int().min(0).max(10000),answer:z.string().max(4000),skip:z.boolean().default(false),seconds}).parse(req.body);const result=lingva.answer(res.locals.studentId,p.id,p.index,p.answer,p.skip);if(result.record)store.mutate(s=>{const key='lingva:'+p.id+':'+p.index;if(!s.attempts.some(a=>a.id===key)){const card=s.cards.find(c=>c.id===result.cardId);const alreadyCorrect=s.attempts.some(a=>a.id.startsWith('lingva:'+p.id+':')&&a.cardId===result.cardId&&a.correct===true);if(card&&(!result.correct||!alreadyCorrect))review(card,result.correct);s.attempts.push({id:key,kind:'card',at:new Date().toISOString(),correct:result.correct,seconds:p.seconds,cardId:result.cardId,topic:card?.topic,answer:p.answer});}});res.json(result);});
   app.post('/api/cards',(req,res)=>{const input=cardInput.parse(req.body);res.json(store.mutate(s=>{
     if(s.cards.some(c=>normalize(c.es)===normalize(input.es)))throw new AppError(409,'Такая фраза уже есть в базе.');
     const card=newCard(input);s.cards.push(card);return card;
