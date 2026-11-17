@@ -6,6 +6,7 @@ import {readRoute} from './navigation';
 import {lessonCards,lessonDate} from './lesson-vocabulary';
 import type {Card,Example,LessonWordResult} from './types';
 import {CardEditor} from './cards';
+import {MaterialsModal} from './materials';
 import {lessonList} from './lesson-list';
 import {parseCardPairs} from './card-pairs';
 import {Badge,Button,Empty,Field,Panel,SectionTitle,Sound} from './ui';
@@ -14,6 +15,7 @@ export function WordsPage(){
   const {state:s,meta,api,run,notify,go,refresh}=useApp(),teacher=meta.role==='teacher';
   const [selectedId,setSelectedId]=useState(()=>readRoute().params.get('lesson')||''),[date,setDate]=useState(today);
   const [text,setText]=useState(''),[title,setTitle]=useState(''),[topic,setTopic]=useState('Повседневное'),[busy,setBusy]=useState(false),[translations,setTranslations]=useState(false),[editing,setEditing]=useState<Card|null>(null);
+  const [miro,setMiro]=useState<{text:string;source:string}|null>(null);
   const input=useRef<HTMLInputElement>(null),listInput=useRef<HTMLTextAreaElement>(null);
   const [listMode,setListMode]=useState(false),[progress,setProgress]=useState('');
   const allLessons=s.lessons.slice().sort((a,b)=>b.date.localeCompare(a.date));
@@ -25,6 +27,8 @@ export function WordsPage(){
   // Keep the student's open lesson list up to date while the teacher adds words.
   useEffect(()=>{if(teacher)return;const timer=setInterval(()=>{if(document.visibilityState==='visible')void refresh().catch(()=>{});},8000);return()=>clearInterval(timer);},[teacher,refresh]);
   return <><SectionTitle eyebrow="" title="Слова" description="Записи с уроков по датам. Все слова связаны с «Автоматизацией»."/>
+    {teacher&&<Panel><div className="section-heading"><h2>Доска Miro ученика</h2>{s.plan.miroBoardUrl&&<a href={s.plan.miroBoardUrl} target="_blank" rel="noreferrer">Открыть доску</a>}</div><p className="small muted">Привяжите доску через «Мои ученики → Имя и уровень». Импорт загружает текст заметок, карточек и надписей через API. Изображения и PDF нужно разбирать отдельно.</p><Button secondary disabled={busy||!s.plan.miroBoardUrl||!meta.miro} onClick={async()=>{setBusy(true);try{const loaded=await api<{text:string;source:string;items:number;skipped:number}>('/miro/text',{});setMiro(loaded);notify('Объектов: '+loaded.items+'. Без доступного текста: '+loaded.skipped+'. Проверьте материал перед добавлением.');}catch(error){notify((error as Error).message);}finally{setBusy(false);}}}>Загрузить из Miro</Button>{!meta.miro&&<p className="small muted">Для импорта добавьте MIRO_ACCESS_TOKEN в Render. Для разбора слов и тем также нужен подключённый ИИ.</p>}</Panel>}
+    {miro&&<MaterialsModal initial={miro} close={()=>setMiro(null)}/>}
     {teacher&&<Panel className="lesson-word-entry"><div className="section-heading"><h2>Добавить слово на уроке</h2><Badge><Layers size={15}/>Сразу в «Автоматизацию»</Badge></div>
       <div className="pills"><button type="button" disabled={busy} className={!listMode?'active':''} onClick={()=>setListMode(false)}>По одному</button><button type="button" disabled={busy} className={listMode?'active':''} onClick={()=>setListMode(true)}>Списком</button></div>
       <form className="form" onSubmit={async event=>{

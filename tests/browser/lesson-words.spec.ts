@@ -93,3 +93,18 @@ test('compact word rows reveal meanings and examples on click; teacher can chang
  await page.getByRole('combobox',{name:'Уровень ученика',exact:true}).selectOption('B1');await page.getByRole('dialog').getByRole('button',{name:'Сохранить',exact:true}).click();await expect(profile).toContainText('B1');
  await profile.getByRole('button',{name:'Открыть кабинет',exact:true}).click();await expect(page.locator('.student-name')).toContainText('B1');
 });
+
+test('Miro board belongs to the selected learner and imported vocabulary reaches dated words and verb practice',async({page})=>{
+ const student=await openNewStudent(page,'Доска Miro · тест');
+ await page.request.patch('/api/students/'+student.student.id,{data:{name:student.student.name,miroBoardUrl:'https://miro.com/app/board/test/'}});
+ await page.route('**/api/state',async route=>{const response=await route.fetch();const body=await response.json();body.meta.ai=true;body.meta.miro=true;await route.fulfill({json:body});});
+ await page.route('**/api/miro/text',route=>route.fulfill({json:{text:'el comedor — столовая\ncuidar — заботиться\nPalabras del colegio',source:'Miro · test',items:2,skipped:0}}));
+ const draft={title:'Слова с доски',transcript:'el comedor — столовая\ncuidar — заботиться\nPalabras del colegio',topics:['Школа'],assignments:[],cards:[{es:'el comedor',ru:'столовая',topic:'Школа',type:'word',register:'neutral',source:'Miro · test',examples:[]},{es:'cuidar',ru:'заботиться',topic:'Школа',type:'word',register:'neutral',source:'Miro · test',examples:[]}]};
+ await page.route('**/api/ai/document',route=>route.fulfill({json:draft}));await page.reload();
+ await expect(page.getByRole('link',{name:'Открыть доску',exact:true})).toHaveAttribute('href','https://miro.com/app/board/test/');
+ await page.getByRole('button',{name:'Загрузить из Miro',exact:true}).click();await expect(page.getByRole('textbox',{name:'Текст фрагмента · можно вставить вручную'})).toHaveValue(/el comedor/);
+ await page.getByRole('button',{name:'Разобрать фрагмент с Claude',exact:true}).click();await expect(page.getByRole('heading',{name:'Проверьте перед добавлением'})).toBeVisible();
+ await page.getByRole('button',{name:'Подтвердить и добавить',exact:true}).click();await expect(page.getByRole('status')).toContainText('Добавлено карточек: 2');
+ await page.getByRole('dialog').getByRole('button',{name:'Закрыть',exact:true}).click();await expect(page.locator('.lesson-word-row')).toHaveCount(2);
+ await page.getByRole('link',{name:'Глаголы',exact:true}).click();await expect(page.getByRole('button',{name:'cuidar',exact:true})).toBeVisible();
+});

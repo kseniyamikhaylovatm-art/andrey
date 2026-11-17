@@ -39,7 +39,7 @@ export class Store {
   profile(id:string):StudentProfile {
     const student=this.student(id);if(!student)throw new Error('Student does not exist');
     const state=this.withStudent(id,()=>this.read());
-    return {id,name:student.name,createdAt:student.created_at,level:state.plan.level,cards:state.cards.length,attempts:state.attempts.length,lastPractice:state.attempts.at(-1)?.at||null};
+    return {id,miroBoardUrl:state.plan.miroBoardUrl,name:student.name,createdAt:student.created_at,level:state.plan.level,cards:state.cards.length,attempts:state.attempts.length,lastPractice:state.attempts.at(-1)?.at||null};
   }
   listStudents():StudentProfile[]{return (this.db.prepare('SELECT id FROM students ORDER BY created_at,id').all() as {id:string}[]).map(row=>this.profile(row.id));}
   createStudent(name:string,level:string,examples=false){

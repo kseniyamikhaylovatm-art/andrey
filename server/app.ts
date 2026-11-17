@@ -1,4 +1,5 @@
 import express from 'express';
+import {miroBoardId,readMiroBoard} from './miro.js';
 import {wordExample,levelGuidance} from './word-example.js';
 import {translateWord} from './translate-word.js';
 import {LingvaSessions} from './lingva.js';
@@ -25,7 +26,8 @@ const normalize=wordKey;
 const find=<T extends {id:string}>(items:T[],key:string)=>{const x=items.find(v=>v.id===key);if(!x)throw new AppError(404,'Запись не найдена. Обновите страницу.');return x;};
 const lessonInput=z.object({date,title:str,note:z.string().max(8000).default(''),status:z.enum(['planned','held','cancelled']).default('planned'),text:z.string().max(100000).optional(),video:z.union([z.literal(''),z.url().startsWith('https://')]).optional()});
 const audioInput=z.object({title:str,url:z.union([z.literal(''),z.url().startsWith('https://')]),transcript:z.string().max(15000),question:str,answer:str,topic:str});
-const planSchema=z.object({level:str,goal:str,goals:z.array(z.object({skill:str,now:str,target:str})).min(1).max(12),criteria:z.array(str).max(20),topics:z.array(str).max(30)});
+const miroUrl=z.string().max(1000).refine(value=>{if(!value)return true;try{miroBoardId(value);return true;}catch{return false;}},'Вставьте ссылку на доску Miro.');
+const planSchema=z.object({miroBoardUrl:miroUrl.optional(),level:str,goal:str,goals:z.array(z.object({skill:str,now:str,target:str})).min(1).max(12),criteria:z.array(str).max(20),topics:z.array(str).max(30)});
 const documentSchema=z.object({title:str,cards:z.array(cardInput).max(120),topics:z.array(str).max(20),transcript:z.string().max(100000),assignments:z.array(str).max(30)});
 function newCard(input:z.infer<typeof cardInput>):Card {return {...input,id:id(),enabled:input.enabled??input.register!=='vulgar',focused:input.focused??false,stage:0,due:new Date(0).toISOString(),seen:0,correct:0};}
 
@@ -68,7 +70,7 @@ export function createApp(store:Store) {
     res.status(201).json(store.createStudent(input.name,input.level,input.examples));
   });
   app.post('/api/students/:studentId/code',(req,res)=>{if(!store.student(req.params.studentId))throw new AppError(404,'Ученик не найден.');res.json({code:store.rotateCode(req.params.studentId)});});
-  app.patch('/api/students/:studentId',(req,res)=>{if(!store.student(req.params.studentId))throw new AppError(404,'Ученик не найден.');const {name,level}=z.object({name:z.string().trim().min(1).max(120),level:z.enum(['A1','A2','B1','B2','C1','C2']).optional()}).parse(req.body);store.withStudent(req.params.studentId,()=>store.mutate(state=>{store.renameStudent(req.params.studentId,name);if(level)state.plan.level=level;}));res.json(store.profile(req.params.studentId));});
+  app.patch('/api/students/:studentId',(req,res)=>{if(!store.student(req.params.studentId))throw new AppError(404,'Ученик не найден.');const {name,level,miroBoardUrl}=z.object({name:z.string().trim().min(1).max(120),level:z.enum(['A1','A2','B1','B2','C1','C2']).optional(),miroBoardUrl:miroUrl.optional()}).parse(req.body);store.withStudent(req.params.studentId,()=>store.mutate(state=>{store.renameStudent(req.params.studentId,name);if(level)state.plan.level=level;if(miroBoardUrl!==undefined)state.plan.miroBoardUrl=miroBoardUrl;}));res.json(store.profile(req.params.studentId));});
   app.use('/api',(req,res,next)=>{
     const principal=res.locals.principal as Principal;
     const selected=req.headers['x-student-id']??req.query.studentId;
@@ -91,7 +93,7 @@ export function createApp(store:Store) {
     if(!permitted){res.status(403).json({error:'Это действие доступно только преподавателю.'});return;}
     next();
   });
-  app.get('/api/state',(_req,res)=>res.json({state:store.read(),meta:{ai:aiReady(),protected:access.session(res.locals.principal).protected,verbs:knownVerbs,demo:process.env.DEMO_MODE==='true',role:(res.locals.principal as Principal).role,student:store.profile(res.locals.studentId)}}));
+  app.get('/api/state',(_req,res)=>res.json({state:store.read(),meta:{ai:aiReady(),miro:Boolean(process.env.MIRO_ACCESS_TOKEN),protected:access.session(res.locals.principal).protected,verbs:knownVerbs,demo:process.env.DEMO_MODE==='true',role:(res.locals.principal as Principal).role,student:store.profile(res.locals.studentId)}}));
   app.get('/api/export',(_req,res)=>{res.setHeader('Content-Disposition','attachment; filename="mi-espanol-backup.json"');res.json({version:2,exportedAt:new Date().toISOString(),student:store.profile(res.locals.studentId),state:store.read()});});
   app.post('/api/lingva/start',(req,res)=>{const p=z.object({topic:z.string().max(4000).optional(),lessonId:z.string().max(100).optional()}).parse(req.body);res.json(lingva.start(res.locals.studentId,store.read(),p.topic,p.lessonId));});
   app.post('/api/lingva/answer',(req,res)=>{const p=z.object({id:z.string().max(100),index:z.number().int().min(0).max(10000),answer:z.string().max(4000),skip:z.boolean().default(false),seconds}).parse(req.body);const result=lingva.answer(res.locals.studentId,p.id,p.index,p.answer,p.skip);if(result.record)store.mutate(s=>{const key='lingva:'+p.id+':'+p.index;if(!s.attempts.some(a=>a.id===key)){const card=s.cards.find(c=>c.id===result.cardId);const alreadyCorrect=s.attempts.some(a=>a.id.startsWith('lingva:'+p.id+':')&&a.cardId===result.cardId&&a.correct===true);if(card&&(!result.correct||!alreadyCorrect))review(card,result.correct);s.attempts.push({id:key,kind:'card',at:new Date().toISOString(),correct:result.correct,seconds:p.seconds,cardId:result.cardId,topic:card?.topic,answer:p.answer});}});res.json(result);});
@@ -119,6 +121,7 @@ export function createApp(store:Store) {
   app.put('/api/plan',(req,res)=>{const p=planSchema.parse(req.body);store.mutate(s=>{s.plan=p;});res.json({ok:true});});
   app.post('/api/lessons',(req,res)=>{const p=lessonInput.parse(req.body);const item={...p,id:id()};store.mutate(s=>{s.lessons.push(item);});res.json(item);});
   app.patch('/api/lessons/:id',(req,res)=>{const p=lessonInput.partial().parse(req.body);store.mutate(s=>Object.assign(find(s.lessons,req.params.id),p));res.json({ok:true});});
+  app.post('/api/miro/text',async(_req,res)=>{const url=store.read().plan.miroBoardUrl;if(!url)throw new AppError(400,'Сначала укажите доску Miro в профиле ученика.');res.json(await readMiroBoard(url,process.env.MIRO_ACCESS_TOKEN||''));});
   app.post('/api/lesson-words/batch',(req,res)=>{const input=lessonWordsInput.parse(req.body);res.json(store.mutate(state=>addLessonWords(state,input)));});
   app.post('/api/lesson-words',(req,res)=>{const input=lessonWordInput.parse(req.body);res.json(store.mutate(state=>addLessonWord(state,input)));});
   app.delete('/api/lessons/:id/words/:cardId',(req,res)=>{store.mutate(state=>{const lesson=find(state.lessons,req.params.id);lesson.cardIds=(lesson.cardIds||[]).filter(key=>key!==req.params.cardId);});res.json({ok:true});});
@@ -194,8 +197,8 @@ export function createApp(store:Store) {
     });
     res.json({added,duplicates:input.cards.length-added});
   });
-  app.post('/api/ai/document',async(req,res)=>{const p=z.object({text:z.string().trim().min(30).max(35000),source:str}).parse(req.body);const raw=await claude(studentPrompt()+' Разбери фрагмент урока. Верни только JSON {title,transcript,cards:[{es,ru,type,topic,register,source,examples:[{es,ru,tense}]}],topics:[строки],assignments:[строки]}. Сохраняй транскрипцию целиком, источник и регистр. Добавь примеры к словам без примеров. Ключи к упражнениям не добавляй в открытые формулировки заданий. Строка таблицы — карточка; конструкции с пропуском — construction, фразы — chunk. Не придумывай содержание исходного документа.',JSON.stringify(p));res.json(documentSchema.parse(aiJSON(raw)));});
-  app.post('/api/import/confirm',(req,res)=>{const p=documentSchema.parse(req.body);let added=0;store.mutate(s=>{const keys=new Set(s.cards.map(c=>normalize(c.es)));for(const c of p.cards){if(!keys.has(normalize(c.es))){s.cards.push(newCard(c));keys.add(normalize(c.es));added++;}}s.plan.topics=[...new Set([...s.plan.topics,...p.topics])];s.lessons.push({id:id(),date:new Date().toISOString().slice(0,10),title:p.title,status:'planned',note:'Материал из PDF · подтверждено преподавателем',text:p.transcript});for(const title of p.assignments)s.assignments.push({id:id(),title,due:new Date(Date.now()+7*86400000).toISOString().slice(0,10),done:false});});res.json({added,duplicates:p.cards.length-added});});
+  app.post('/api/ai/document',async(req,res)=>{const p=z.object({text:z.string().trim().min(30).max(35000),source:str}).parse(req.body);const raw=await claude(studentPrompt()+' Разбери фрагмент урока. Выбери полезные повседневные слова и фразы по уровню ученика, сгруппируй по темам. Не утверждай статистическую частотность без данных. Глаголы из материала добавляй также отдельными карточками-инфинитивами с русским переводом для тренажёра глаголов. Верни только JSON {title,transcript,cards:[{es,ru,type,topic,register,source,examples:[{es,ru,tense}]}],topics:[строки],assignments:[строки]}. Сохраняй транскрипцию целиком, источник и регистр. Добавь примеры к словам без примеров. Ключи к упражнениям не добавляй в открытые формулировки заданий. Строка таблицы — карточка; конструкции с пропуском — construction, фразы — chunk. Не придумывай содержание исходного документа.',JSON.stringify(p));res.json(documentSchema.parse(aiJSON(raw)));});
+  app.post('/api/import/confirm',(req,res)=>{const p=documentSchema.parse(req.body);let added=0;store.mutate(s=>{const keys=new Set(s.cards.map(c=>normalize(c.es)));for(const c of p.cards){if(!keys.has(normalize(c.es))){s.cards.push(newCard(c));keys.add(normalize(c.es));added++;}}s.plan.topics=[...new Set([...s.plan.topics,...p.topics])];s.lessons.push({id:id(),date:new Date().toISOString().slice(0,10),title:p.title,status:'planned',note:'Импорт материалов · подтверждено преподавателем',cardIds:s.cards.filter(card=>p.cards.some(input=>normalize(input.es)===normalize(card.es))).map(card=>card.id),text:p.transcript});for(const title of p.assignments)s.assignments.push({id:id(),title,due:new Date(Date.now()+7*86400000).toISOString().slice(0,10),done:false});});res.json({added,duplicates:p.cards.length-added});});
   app.use('/api',(_req,res)=>res.status(404).json({error:'Такого действия нет.'}));
   app.use((err:unknown,_req:express.Request,res:express.Response,_next:express.NextFunction)=>{
     if(err instanceof z.ZodError){res.status(400).json({error:'Проверьте поля формы: '+err.issues.map(x=>x.path.join('.')+': '+x.message).join('; ')});return;}
