@@ -6,7 +6,7 @@ async function openNewStudent(page:Page,name:string){
   await page.goto('/');await page.locator('.student-card').filter({has:page.getByRole('heading',{name,exact:true})}).getByRole('button',{name:'Открыть кабинет'}).click();
   await page.getByRole('link',{name:'Слова',exact:true}).click();return result;
 }
-async function record(page:Page,text:string){const field=page.getByRole('textbox',{name:'Слово — перевод',exact:true});await field.fill(text);await field.press('Enter');await expect(field).toHaveValue('');}
+async function record(page:Page,text:string){const field=page.getByRole('textbox',{name:'Слово на испанском',exact:true});await field.fill(text);await field.press('Enter');await expect(field).toHaveValue('');}
 
 test('teacher keeps dated lesson lists and trains all words of the selected lesson using the same editable cards',async({page})=>{
   await page.setViewportSize({width:1586,height:1100});const result=await openNewStudent(page,'Слова · учебный кабинет');
@@ -57,4 +57,17 @@ test('a student sees live lesson vocabulary on a phone and can practice even the
     await page.setViewportSize({width:390,height:844});await page.reload();await expect(page.getByRole('heading',{name:'Слова',exact:true})).toBeVisible();expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
     await page.screenshot({path:'test-results/lesson-words-teacher-mobile.png',fullPage:true,animations:'disabled'});
   }finally{await context.close();}
+});
+
+test('Spanish-only input is translated, saved in the dated list and visible with its Russian translation',async({page})=>{
+ const result=await openNewStudent(page,'Автоперевод · тест');
+ await page.route('**/api/ai/translate-word',route=>route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({es:'el cuaderno',ru:'тетрадь',source:'ai'})}));
+ await record(page,'el cuaderno');
+ const row=page.locator('.lesson-word-row').filter({hasText:'el cuaderno'});await expect(row).toContainText('тетрадь');await expect(row.locator('.word-record-date')).not.toBeEmpty();
+ const state=(await (await page.request.get('/api/state',{headers:{'X-Student-Id':result.student.id}})).json()).state;expect(state.cards[0].ru).toBe('тетрадь');expect(state.lessons[0].cardIds).toContain(state.cards[0].id);
+});
+test('unavailable AI preserves the entered word and creates no empty lesson or untranslated card',async({page})=>{
+ const result=await openNewStudent(page,'Нет ИИ · тест');const field=page.getByRole('textbox',{name:'Слово на испанском',exact:true});await field.fill('el cuaderno');await field.press('Enter');
+ await expect(page.getByRole('status')).toContainText('Автоперевод пока не подключён');await expect(field).toHaveValue('el cuaderno');
+ const state=(await (await page.request.get('/api/state',{headers:{'X-Student-Id':result.student.id}})).json()).state;expect(state.cards).toHaveLength(0);expect(state.lessons).toHaveLength(0);
 });

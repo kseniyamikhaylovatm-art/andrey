@@ -1,4 +1,5 @@
 import express from 'express';
+import {translateWord} from './translate-word.js';
 import {LingvaSessions} from './lingva.js';
 import {accessControl,type Principal} from './access.js';
 import { z } from 'zod';
@@ -140,6 +141,7 @@ export function createApp(store:Store) {
     store.mutate(s=>{const current=find(s.cards,req.params.id);const saved=new Set(current.examples.map(e=>resolveExampleTense(e.tense)));current.examples.push(...examples.filter(e=>!saved.has(e.tense)));});
     res.json({ok:true});
   });
+  app.post('/api/ai/translate-word',async(req,res)=>{const {es}=z.object({es:z.string().trim().min(1).max(4000).refine(value=>!/[\r\n]/.test(value),'Введите одно слово или выражение.')} ).parse(req.body);if(!aiReady()&&!store.read().cards.some(card=>normalize(card.es)===normalize(es)))throw new AppError(503,'Автоперевод пока не подключён. Добавьте ANTHROPIC_API_KEY в Render или введите слово — перевод вручную.');res.json(await translateWord(store.read(),es));});
   app.post('/api/ai/quick-card',async(req,res)=>{const p=z.object({es:str}).parse(req.body);const raw=await claude(studentPrompt()+' Верни только JSON {es,ru,topic,type,register,source,examples:[{es,ru}]}. type: word/chunk/construction, register: neutral/colloquial/vulgar. source: «Быстрое добавление · Claude».',p.es);res.json(cardInput.parse(aiJSON(raw)));});
   app.post('/api/ai/verbs',async(req,res)=>{const p=z.object({verb:z.string().trim().min(2).max(70),tense}).parse(req.body);const raw=await claude(studentPrompt()+' Верни только JSON-массив из 6 точных форм: yo, tú, él, nosotros, vosotros, ellos. Для reflexivos добавь местоимение. Без личных местоимений подлежащего. Проверь ударения.',`${p.verb}, ${tenseNames[p.tense]}`);const forms=z.array(str).length(6).parse(aiJSON(raw));store.mutate(s=>{s.verbTables[p.verb]??={};s.verbTables[p.verb][p.tense]=forms;});res.json({forms});});
   app.post('/api/ai/summary',async(_req,res)=>{const state=store.read();const text=aiReady()?await claude(studentPrompt()+' Напиши краткую сводку к уроку: сделано, проблемы, реальная речь, что взять на урок. Опираться только на данные.',JSON.stringify({summary:localSummary(state),recentAttempts:state.attempts.slice(-100),speech:state.speeches.slice(-5),diary:state.diary.slice(-10),dialogues:state.dialogs.slice(-3)})):localSummary(state);const summary={text,date:new Date().toISOString()};store.mutate(s=>{s.summary=summary;});res.json(summary);});
