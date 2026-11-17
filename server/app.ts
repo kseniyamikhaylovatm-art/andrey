@@ -11,7 +11,7 @@ import {exampleTense as resolveExampleTense} from '../src/example-tenses.js';
 import {cardContext} from './card-context.js';
 import { parseCardPairs } from './card-import.js';
 import { extractPdf } from './pdf.js';
-import {addLessonWord,lessonWordInput,wordKey} from './lesson-words.js';
+import {addLessonWord,lessonWordInput,addLessonWords,lessonWordsInput,wordKey} from './lesson-words.js';
 
 const str=z.string().trim().min(1).max(4000);
 const date=z.iso.date();
@@ -117,6 +117,7 @@ export function createApp(store:Store) {
   app.put('/api/plan',(req,res)=>{const p=planSchema.parse(req.body);store.mutate(s=>{s.plan=p;});res.json({ok:true});});
   app.post('/api/lessons',(req,res)=>{const p=lessonInput.parse(req.body);const item={...p,id:id()};store.mutate(s=>{s.lessons.push(item);});res.json(item);});
   app.patch('/api/lessons/:id',(req,res)=>{const p=lessonInput.partial().parse(req.body);store.mutate(s=>Object.assign(find(s.lessons,req.params.id),p));res.json({ok:true});});
+  app.post('/api/lesson-words/batch',(req,res)=>{const input=lessonWordsInput.parse(req.body);res.json(store.mutate(state=>addLessonWords(state,input)));});
   app.post('/api/lesson-words',(req,res)=>{const input=lessonWordInput.parse(req.body);res.json(store.mutate(state=>addLessonWord(state,input)));});
   app.delete('/api/lessons/:id/words/:cardId',(req,res)=>{store.mutate(state=>{const lesson=find(state.lessons,req.params.id);lesson.cardIds=(lesson.cardIds||[]).filter(key=>key!==req.params.cardId);});res.json({ok:true});});
   app.post('/api/assignments',(req,res)=>{const p=z.object({title:str,due:date}).parse(req.body);const item={...p,id:id(),done:false};store.mutate(s=>s.assignments.push(item));res.json(item);});

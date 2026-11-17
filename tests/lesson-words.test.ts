@@ -65,3 +65,16 @@ test('teacher records words in one student space; the student reads and reviews 
     const unlinked=(await request('/state',learner)).body.state;assert.deepEqual(unlinked.lessons[0].cardIds,[]);assert.equal(unlinked.cards[0].seen,1,'Removing a lesson link must retain the card and progress');
   }finally{await new Promise<void>(resolve=>server.close(()=>resolve()));store.close();rmSync(dir,{recursive:true});if(saved===undefined)delete process.env.TEACHER_ACCESS_CODE;else process.env.TEACHER_ACCESS_CODE=saved;}
 });
+
+test('a whole lesson list saves atomically, reuses cards and preserves their review history',async()=>{
+ const {addLessonWords,lessonWordsInput}=await import('../server/lesson-words.js');
+ const dir=mkdtempSync(join(tmpdir(),'es-lesson-list-')),store=new Store(dir);
+ try{
+  const existing=store.read().cards[0],before=structuredClone(existing);
+  const result=store.mutate(state=>addLessonWords(state,lessonWordsInput.parse({date:'2026-11-18',text:'el cuaderno — тетрадь\nla pizarra — доска\nel cuaderno — тетрадь\n'+existing.es+' — '+existing.ru})));
+  assert.equal(result.added,2);assert.equal(result.reused,2);
+  assert.equal(store.read().lessons.find(lesson=>lesson.id===result.lessonId)?.cardIds?.length,3);
+  assert.deepEqual(store.read().cards.find(card=>card.id===existing.id),before);
+  const saved=store.read();assert.throws(()=>store.mutate(state=>addLessonWords(state,lessonWordsInput.parse({date:'2026-11-19',text:'la mesa — стол\nстрока без перевода'}))));assert.deepEqual(store.read(),saved);
+ }finally{store.close();rmSync(dir,{recursive:true});}
+});

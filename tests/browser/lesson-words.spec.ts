@@ -71,3 +71,14 @@ test('unavailable AI preserves the entered word and creates no empty lesson or u
  await expect(page.getByRole('status')).toContainText('Автоперевод пока не подключён');await expect(field).toHaveValue('el cuaderno');
  const state=(await (await page.request.get('/api/state',{headers:{'X-Student-Id':result.student.id}})).json()).state;expect(state.cards).toHaveLength(0);expect(state.lessons).toHaveLength(0);
 });
+
+test('teacher pastes a whole list into Words and saves one dated record without duplicates or partial invalid imports',async({page})=>{
+ const result=await openNewStudent(page,'Список целиком · тест');await page.getByRole('button',{name:'Списком',exact:true}).click();
+ const field=page.getByRole('textbox',{name:'Список слов',exact:true});
+ await field.fill('el comedor — столовая\nla cocina —');await page.getByRole('button',{name:'Добавить список',exact:true}).click();await expect(page.getByRole('status')).toContainText('строку 2');await expect(field).toHaveValue('el comedor — столовая\nla cocina —');
+ let state=(await (await page.request.get('/api/state',{headers:{'X-Student-Id':result.student.id}})).json()).state;expect(state.cards).toHaveLength(0);expect(state.lessons).toHaveLength(0);
+ await field.fill('el comedor — столовая\nla cocina — кухня\nla ventana — окно\nel comedor — столовая');await page.getByRole('button',{name:'Добавить список',exact:true}).click();await expect(field).toHaveValue('');await expect(page.locator('.lesson-word-row')).toHaveCount(3);
+ state=(await (await page.request.get('/api/state',{headers:{'X-Student-Id':result.student.id}})).json()).state;expect(state.cards).toHaveLength(3);expect(state.lessons).toHaveLength(1);expect(state.lessons[0].cardIds).toHaveLength(3);
+ await expect(page.locator('.lesson-word-row').filter({hasText:'el comedor'})).toContainText('столовая');
+ await page.getByRole('button',{name:'Тренировать слова урока',exact:true}).click();await expect(page.getByRole('combobox',{name:'Слова какого урока',exact:true})).toHaveValue(state.lessons[0].id);
+});

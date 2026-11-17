@@ -6,6 +6,7 @@ import {readRoute} from './navigation';
 import {lessonCards,lessonDate} from './lesson-vocabulary';
 import type {Card,LessonWordResult} from './types';
 import {CardEditor} from './cards';
+import {lessonList} from './lesson-list';
 import {parseCardPairs} from './card-pairs';
 import {Badge,Button,Empty,Field,Panel,SectionTitle,Sound} from './ui';
 
@@ -13,7 +14,8 @@ export function WordsPage(){
   const {state:s,meta,api,run,notify,go,refresh}=useApp(),teacher=meta.role==='teacher';
   const [selectedId,setSelectedId]=useState(()=>readRoute().params.get('lesson')||''),[date,setDate]=useState(today);
   const [text,setText]=useState(''),[title,setTitle]=useState(''),[topic,setTopic]=useState('Повседневное'),[busy,setBusy]=useState(false),[translations,setTranslations]=useState(true),[editing,setEditing]=useState<Card|null>(null);
-  const input=useRef<HTMLInputElement>(null);
+  const input=useRef<HTMLInputElement>(null),listInput=useRef<HTMLTextAreaElement>(null);
+  const [listMode,setListMode]=useState(false),[progress,setProgress]=useState('');
   const allLessons=s.lessons.slice().sort((a,b)=>b.date.localeCompare(a.date));
   const lessons=teacher?allLessons:allLessons.filter(lesson=>lessonCards(s.cards,lesson).length);
   const lesson=lessons.find(item=>item.id===selectedId)||lessons.find(item=>teacher?item.date===date:true);
@@ -24,8 +26,22 @@ export function WordsPage(){
   useEffect(()=>{if(teacher)return;const timer=setInterval(()=>{if(document.visibilityState==='visible')void refresh().catch(()=>{});},8000);return()=>clearInterval(timer);},[teacher,refresh]);
   return <><SectionTitle eyebrow="" title="Слова" description="Записи с уроков по датам. Все слова связаны с «Автоматизацией»."/>
     {teacher&&<Panel className="lesson-word-entry"><div className="section-heading"><h2>Добавить слово на уроке</h2><Badge><Layers size={15}/>Сразу в «Автоматизацию»</Badge></div>
+      <div className="pills"><button type="button" disabled={busy} className={!listMode?'active':''} onClick={()=>setListMode(false)}>По одному</button><button type="button" disabled={busy} className={listMode?'active':''} onClick={()=>setListMode(true)}>Списком</button></div>
       <form className="form" onSubmit={async event=>{
         event.preventDefault();setBusy(true);
+        if(listMode){
+          const saved=await run(async()=>{
+            const rows=lessonList(text),missing=rows.filter(row=>!row.ru);
+            if(missing.length>50)throw new Error('За один раз можно автоматически перевести до 50 слов. Пары с переводом — до 100.');
+            if(missing.length&&!meta.ai)throw new Error('Автоперевод пока не подключён. Добавьте русский перевод в каждую строку: слово — перевод.');
+            for(let index=0;index<missing.length;index++){setProgress('Переводим '+(index+1)+' из '+missing.length);const translated=await api<{ru:string}>('/ai/translate-word',{es:missing[index].es});missing[index].ru=translated.ru;}
+            setProgress('Сохраняем список…');
+            return api<{lessonId:string;added:number;reused:number;translationKept:number;disabled:number}>('/lesson-words/batch',{date:lesson?.date||date,lessonId:lesson?.id,text:rows.map(row=>row.es+' — '+row.ru).join('\n'),topic,title});
+          });
+          setBusy(false);setProgress('');
+          if(saved){setSelectedId(saved.lessonId);setText('');setTitle('');notify('Список сохранён. Новых карточек: '+saved.added+'. Уже в базе: '+saved.reused+'.'+(saved.translationKept?' Прежние переводы сохранены: '+saved.translationKept+'.':'')+(saved.disabled?' Выключенных карточек: '+saved.disabled+'.':''));requestAnimationFrame(()=>listInput.current?.focus());}
+          return;
+        }
         const result=await run(async()=>{
           let pair=text.trim();
           const parsed=parseCardPairs(pair);
@@ -39,7 +55,8 @@ export function WordsPage(){
         setBusy(false);
         if(result){setSelectedId(result.lessonId);setText('');setTitle('');notify(!result.enabled?'Слово добавлено к уроку. Карточка выключена — включите её для тренировки.':result.translationKept?'Слово добавлено к уроку. В базе сохранён прежний перевод; его можно исправить кнопкой с карандашом.':result.created?'Слово сохранено в уроке и в «Автоматизации».':'Слово уже было в базе. Оно добавлено к этому уроку, прогресс сохранён.');requestAnimationFrame(()=>input.current?.focus());}
       }}><div className="lesson-entry-meta"><Field label="Дата урока"><input type="date" value={lesson?.date||date} disabled={busy} onChange={event=>{setDate(event.target.value);setSelectedId('');}} required/></Field>{lesson?<div className="lesson-entry-selected"><CalendarDays size={19}/><span>{lesson.title}</span></div>:<Field label="Название урока · необязательно"><input value={title} disabled={busy} maxLength={200} placeholder="Например, В ресторане" onChange={event=>setTitle(event.target.value)}/></Field>}<Field label="Тема слова"><input value={topic} disabled={busy} maxLength={200} list="lesson-word-topics" onChange={event=>setTopic(event.target.value)} required/><datalist id="lesson-word-topics">{s.plan.topics.map(item=><option key={item}>{item}</option>)}</datalist></Field></div>
-        <div className="lesson-entry-line"><Field label="Слово на испанском"><input ref={input} value={text} disabled={busy} onChange={event=>setText(event.target.value)} required maxLength={10000} placeholder="Например, el barrio" autoComplete="off"/></Field><Button type="submit" disabled={busy||!text.trim()}><Plus size={19}/>{busy?'Переводим и сохраняем…':'Добавить слово'}</Button></div><p className="small muted">Введите испанское слово и нажмите Enter: ИИ добавит русский перевод. Можно также записать свою пару «слово — перевод».</p>
+        {listMode?<><Field label="Список слов"><textarea ref={listInput} value={text} disabled={busy} onChange={event=>setText(event.target.value)} rows={8} required maxLength={200000} placeholder={'el comedor — столовая\nla cocina — кухня\nla ventana — окно'} onKeyDown={event=>{if(event.key==='Enter'&&(event.ctrlKey||event.metaKey)){event.preventDefault();event.currentTarget.form?.requestSubmit();}}}/></Field><p className="small muted">Одно слово или выражение на строку. До 100 пар с переводом или до 50 слов для автоперевода. Enter — новая строка, ⌘/Ctrl + Enter — добавить список.</p><Button type="submit" disabled={busy||!text.trim()}>{busy?progress||'Проверяем список…':'Добавить список'}</Button></>:<><div className="lesson-entry-line"><Field label="Слово на испанском"><input ref={input} value={text} disabled={busy} onChange={event=>setText(event.target.value)} required maxLength={10000} placeholder="Например, el barrio" autoComplete="off"/></Field><Button type="submit" disabled={busy||!text.trim()}><Plus size={19}/>{busy?'Переводим и сохраняем…':'Добавить слово'}</Button></div><p className="small muted">Введите испанское слово и нажмите Enter: ИИ добавит русский перевод. Можно также записать свою пару «слово — перевод».</p></>}
+
       </form>{!meta.ai&&<p className="notice" role="note">Автоперевод ИИ пока не подключён. Преподавателю нужно добавить ANTHROPIC_API_KEY в настройках Render. Пока можно вводить «испанское слово — русский перевод».</p>}
     </Panel>}
     <Panel className="lesson-words-panel"><div className="lesson-words-heading"><div><div className="eyebrow">СЛОВА УРОКА</div><h2>{lesson?lessonDate(lesson.date):teacher?lessonDate(date):'Записи с занятий'}</h2>{lesson&&<p className="muted">{lesson.title}</p>}</div><div className="lesson-words-controls"><label className="check-label"><input type="checkbox" checked={translations} onChange={event=>setTranslations(event.target.checked)}/>Показать переводы</label><div className="lesson-date-arrows"><button className="icon-btn" aria-label="Предыдущий урок" disabled={busy||index<0||index>=lessons.length-1} onClick={()=>select(lessons[index+1].id)}><ChevronLeft size={21}/></button><button className="icon-btn" aria-label="Следующий урок" disabled={busy||index<=0} onClick={()=>select(lessons[index-1].id)}><ChevronRight size={21}/></button></div></div></div>

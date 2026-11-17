@@ -30,3 +30,12 @@ export function addLessonWord(state:AppState,input:z.infer<typeof lessonWordInpu
   lesson.cardIds=[...new Set([...(lesson.cardIds||[]),card.id])];
   return {lessonId:lesson.id,cardId:card.id,created,translationKept:!created&&wordKey(card.ru)!==wordKey(pair.ru),enabled:card.enabled};
 }
+
+export const lessonWordsInput=lessonWordInput.extend({text:z.string().trim().min(1).max(200000)});
+export function addLessonWords(state:AppState,input:z.infer<typeof lessonWordsInput>){
+ const parsed=parseCardPairs(input.text);
+ if(parsed.issues.length)throw new AppError(400,'Проверьте строки: '+parsed.issues.map(issue=>issue.line).join(', ')+'. Нужны пары «слово — перевод».');
+ if(!parsed.cards.length||parsed.cards.length>100)throw new AppError(400,'Добавьте от 1 до 100 слов за один раз.');
+ const results=parsed.cards.map(pair=>addLessonWord(state,{...input,text:pair.es+' — '+pair.ru}));
+ return {lessonId:results[0].lessonId,added:results.filter(result=>result.created).length,reused:results.filter(result=>!result.created).length,translationKept:results.filter(result=>result.translationKept).length,disabled:results.filter(result=>!result.enabled).length};
+}
