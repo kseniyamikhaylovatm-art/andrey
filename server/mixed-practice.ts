@@ -5,7 +5,7 @@ import {practiceChoices,choiceCorrect} from '../src/practice-choices.js';
 import {conjugate} from './domain.js';
 import {AppError} from './ai.js';
 type Selection={mode:'new'|'review'|'focus'|'all';topic?:string;lessonId?:string;includeVerbs:boolean};
-export interface MixedRecord {id:string;cardId:string;correct:boolean;kind:'card'|'verb';updateSchedule:boolean;answer:string;tense?:'presente';verb?:string}
+export interface MixedRecord {id:string;cardId:string;correct:boolean;kind:'card'|'verb';completed:boolean;updateSchedule:boolean;answer:string;tense?:'presente';verb?:string}
 interface Session {owner:string;expires:number;tasks:MixedTask[];index:number;correctFirst:number;answered:boolean;wrongIds:Set<string>;responses:Map<string,boolean>;feedback?:MixedStep['feedback']}
 const shuffle=<T>(list:T[])=>{const result=[...list];for(let i=result.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[result[i],result[j]]=[result[j],result[i]];}return result;};
 export function mixedTasks(state:AppState,input:Selection,now=Date.now()):MixedTask[]{
@@ -34,7 +34,7 @@ export class MixedPracticeSessions {
   if(session.responses.has(key))return {...this.view(id,session),feedback:{correct:session.responses.get(key)!,firstTry:session.responses.size===1&&session.wrongIds.size===0,selectedId:input.answerCardId,duplicate:true}};
   if(session.answered)throw new AppError(409,'Ответ уже сохранён. Перейдите к следующему заданию.');
   const first=session.responses.size===0;
-  record({id:'mixed:'+id+':'+index+':'+key,cardId:card.id,correct,kind:task.kind==='verb'?'verb':'card',updateSchedule:first&&task.kind!=='verb',answer:task.kind==='choice'?input.answerCardId!:correct?'Самооценка: вспомнил':'Самооценка: не вспомнил',...task.kind==='verb'?{tense:task.tense,verb:card.es.trim().toLocaleLowerCase('es')}:{}});
+  record({id:'mixed:'+id+':'+index+':'+key,cardId:card.id,correct,kind:task.kind==='verb'?'verb':'card',completed:task.kind!=='choice'||correct,updateSchedule:first&&task.kind!=='verb',answer:task.kind==='choice'?input.answerCardId!:correct?'Самооценка: вспомнил':'Самооценка: не вспомнил',...task.kind==='verb'?{tense:task.tense,verb:card.es.trim().toLocaleLowerCase('es')}:{}});
   session.responses.set(key,correct);if(!correct&&input.answerCardId)session.wrongIds.add(input.answerCardId);
   if(first&&correct)session.correctFirst++;
   session.answered=task.kind!=='choice'||correct;session.feedback={correct,firstTry:first&&correct,selectedId:input.answerCardId};return this.view(id,session);

@@ -31,10 +31,11 @@ export interface CardContextData {
 export interface Card {
   id: string; es: string; ru: string; type: 'word' | 'chunk' | 'construction'; topic: string;
   register: 'neutral' | 'colloquial' | 'vulgar'; enabled: boolean; focused: boolean;
-  imageUrl?: string; examples: Example[]; source: string; stage: number; due: string; seen: number; correct: number;
+  ankiLearning?:boolean;ankiStep?:number;imageUrl?: string; examples: Example[]; source: string; stage: number; due: string; seen: number; correct: number;
 }
 export interface Attempt {
   id: string; kind: 'card' | 'verb' | 'speech' | 'listening'; at: string; correct: boolean | null;
+  format?:PracticeFormat;sessionId?:string;xp?:number;stageAfter?:number;difficult?:boolean;completed?:boolean;rating?:'again'|'hard'|'good'|'easy';
   seconds: number; cardId?: string; topic?: string; verb?: string; tense?: string; answer?: string;
 }
 export interface Lesson { id: string; date: string; title: string; status: 'planned' | 'held' | 'cancelled'; note: string; text?: string; video?: string; cardIds?: string[] }
@@ -46,7 +47,7 @@ export interface Dialog { id: string; date: string; topic: string; focus: string
 export interface AudioItem { id: string; title: string; url: string; transcript: string; question: string; answer: string; topic: string }
 export interface Plan { miroBoardUrl?:string; level: string; goal: string; goals: { skill: string; now: string; target: string }[]; criteria: string[]; topics: string[] }
 export interface AppState {
-  cards: Card[]; attempts: Attempt[]; lessons: Lesson[]; assignments: Assignment[]; diary: Diary[];
+  practiceSessions?:PracticeSession[];cards: Card[]; attempts: Attempt[]; lessons: Lesson[]; assignments: Assignment[]; diary: Diary[];
   speeches: SpeechRecord[]; dialogs: Dialog[]; audios: AudioItem[]; payments: Payment[];
   plan: Plan; verbTables: Record<string, Partial<Record<Tense, string[]>>>;
   summary: { text: string; date: string } | null;
@@ -57,3 +58,6 @@ export interface WorkspaceMeta {ai:boolean;protected:boolean;verbs:string[];demo
 
 export interface Payment {id:string;date:string;lessons?:number;note?:string}
 export interface PaymentSummary {paid:number;used:number;remaining:number;last:string|null}
+
+export type PracticeFormat='seventeen'|'duolingo'|'anki';
+export interface PracticeSession {id:string;format:PracticeFormat;startedAt:string;finishedAt?:string;total:number;topic?:string;lessonId?:string}

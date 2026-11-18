@@ -43,6 +43,7 @@ export function initialState(): AppState {
   };
 }
 export function review(card: Card, correct: boolean, now = new Date()): void {
+  delete card.ankiLearning;delete card.ankiStep;
   card.seen++; if(correct) card.correct++;
   card.stage = correct ? Math.min(card.stage+1,6) : 0;
   card.due = new Date(+now + (correct ? [0,1,2,4,8,16,32][card.stage]*86400000 : 600000)).toISOString();
