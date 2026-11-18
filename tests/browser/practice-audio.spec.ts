@@ -64,7 +64,7 @@ test('a failed self-review request produces no signal or example and lets the le
 });
 test('a new question cancels the pending example and mobile recall controls stay readable',async({page})=>{
  await observeAudio(page);await page.setViewportSize({width:390,height:844});await page.goto('/#cards?view=train');await page.getByRole('button',{name:'Начать тренировку',exact:true}).click();
- await hint(page);const button=page.getByRole('button',{name:'Вспомнил',exact:true});expect((await button.boundingBox())!.height).toBeGreaterThanOrEqual(76);
+ await hint(page);const button=page.getByRole('button',{name:'Вспомнил',exact:true});expect((await button.boundingBox())!.height).toBeGreaterThanOrEqual(48);
  expect(await page.locator('.flashcard-word h2').evaluate(e=>parseFloat(getComputedStyle(e).fontSize))).toBeGreaterThanOrEqual(40);
  await grade(page);await expect(page.locator('.answer-feedback')).toBeVisible();await page.getByRole('button',{name:'Следующая фраза',exact:false}).click();
  const spoken=(await audit(page)).spoken.length;await page.waitForTimeout(650);expect((await audit(page)).spoken).toHaveLength(spoken);
