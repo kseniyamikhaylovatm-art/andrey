@@ -1,5 +1,5 @@
 import {useEffect,useId,useRef,useState} from 'react';
-import {BookOpen,ChevronLeft,ChevronRight,PenLine,Sparkles} from 'lucide-react';
+import {BookOpen,ChevronLeft,ChevronRight,Eye,EyeOff,PenLine,Sparkles} from 'lucide-react';
 import {speak} from './api';
 import {useApp} from './context';
 import {exampleTenseNames,exampleTenseDescriptions,type Card,type CardContextData,type Example,type ExampleTense} from './types';
@@ -27,24 +27,25 @@ export function CardContext({card,revealed,autoRead=false,onExample}:{card:Card;
   },[card.id,revealed,examplesKey,tablesKey,autoRead,meta.ai]);
   useEffect(()=>{if(!revealed||!autoRead||!data||played.current)return;const example=data.examples.find(e=>e.origin==='card')||data.originalExamples[0];if(example){played.current=true;reader.current?.(example.es);}},[data,revealed,autoRead]);
   const index=tenses.indexOf(selected),active=data?.examples.filter(e=>e.tense===selected)||[];
+  function selectTense(tense:ExampleTense){setSelected(tense);const example=data?.examples.find(example=>example.tense===tense);if(revealed&&example)reader.current?.(example.es);}
   function move(offset:number,focus=false){
-    const next=tenses[(index+offset+tenses.length)%tenses.length];setSelected(next);
+    const next=tenses[(index+offset+tenses.length)%tenses.length];selectTense(next);
     if(focus)document.getElementById(prefix+'-'+next)?.focus();
   }
   return <Panel className="tense-context">
     <div className="section-heading"><div><div className="eyebrow">ОДНО СЛОВО · РАЗНЫЕ СИТУАЦИИ</div><h2>Слово в разных временах</h2></div><BookOpen size={21}/></div>
     {!revealed?<Empty>Сначала попробуйте ответить. После ответа откроются шесть вкладок с примерами.</Empty>:<>
-      {!!data?.originalExamples.length&&<div className="recall-example"><Badge gold>Пример из вашего материала</Badge><div className="tense-sentence"><p lang="es">{data.originalExamples[0].es}</p><Sound text={data.originalExamples[0].es} notify={notify}/></div><p className="tense-translation">{data.originalExamples[0].ru}</p></div>}
+      {!!data?.originalExamples.length&&<div className="recall-example"><Badge gold>Пример из вашего материала</Badge><div className="tense-sentence"><p lang="es">{data.originalExamples[0].es}</p><Sound text={data.originalExamples[0].es} notify={notify}/></div><ExampleTranslation key={data.originalExamples[0].es} text={data.originalExamples[0].ru}/></div>}
       <div className="tense-tabs" role="tablist" aria-label="Времена примеров" onKeyDown={e=>{
         if(e.key==='ArrowRight'||e.key==='ArrowLeft'){e.preventDefault();move(e.key==='ArrowRight'?1:-1,true);}
-        if(e.key==='Home'||e.key==='End'){e.preventDefault();const tense=e.key==='Home'?tenses[0]:tenses.at(-1)!;setSelected(tense);document.getElementById(prefix+'-'+tense)?.focus();}
-      }}>{tenses.map((tense,i)=><button key={tense} id={prefix+'-'+tense} role="tab" aria-selected={selected===tense} aria-controls={prefix+'-panel'} tabIndex={selected===tense?0:-1} className={'tense-tab tone-'+i} onClick={()=>setSelected(tense)}><span>{i+1}</span>{exampleTenseNames[tense]}</button>)}</div>
+        if(e.key==='Home'||e.key==='End'){e.preventDefault();const tense=e.key==='Home'?tenses[0]:tenses.at(-1)!;selectTense(tense);document.getElementById(prefix+'-'+tense)?.focus();}
+      }}>{tenses.map((tense,i)=><button key={tense} id={prefix+'-'+tense} role="tab" aria-selected={selected===tense} aria-controls={prefix+'-panel'} tabIndex={selected===tense?0:-1} className={'tense-tab tone-'+i} onClick={()=>selectTense(tense)}><span>{i+1}</span>{exampleTenseNames[tense]}</button>)}</div>
       <div className="tense-example-panel" role="tabpanel" id={prefix+'-panel'} aria-labelledby={prefix+'-'+selected} aria-busy={loading}>
         <div className="tense-example-heading"><div><Badge gold>{exampleTenseDescriptions[selected]}</Badge><h3>{exampleTenseNames[selected]}</h3></div><div className="tense-arrows"><button className="icon-btn" aria-label="Предыдущее время" onClick={()=>move(-1)}><ChevronLeft size={21}/></button><button className="icon-btn" aria-label="Следующее время" onClick={()=>move(1)}><ChevronRight size={21}/></button></div></div>
         {loading?<p className="empty" role="status">Открываем пример из вашего материала…</p>:error?<p className="form-error" role="alert">{error}</p>:<>
           {active.length?active.map((example,i)=><div className="example tense-example" key={i}>
             <div className="tense-sentence"><p lang="es">{example.es}</p><Sound text={example.es} notify={notify}/></div>
-            <p className="tense-translation">{example.ru}</p>
+            <ExampleTranslation key={example.es} text={example.ru}/>
             <small>{example.origin==='library'?'Стартовый учебный пример':'Пример из карточки'}</small>
           </div>):<Empty>Для «{card.es}» пока нет примера в этом времени. Преподаватель может добавить предложение с переводом в эту вкладку.</Empty>}
           {data?.forms[selected]&&<div className="tense-forms-section"><div className="eyebrow">{data.verb} · ФОРМЫ ДЛЯ ПОВТОРЕНИЯ</div><div className="tense-forms">{data.forms[selected]!.map((form,i)=><button key={i} title="Нажмите, чтобы послушать" aria-label={'Озвучить '+people[i]+': '+form} onClick={()=>{try{speak(form);}catch(e){notify((e as Error).message);}}}><small>{people[i]}</small><strong lang="es">{form}</strong></button>)}</div><p className="small muted">Нажмите на форму, чтобы послушать её.</p></div>}
@@ -53,7 +54,7 @@ export function CardContext({card,revealed,autoRead=false,onExample}:{card:Card;
           <div className="panel-bottom">{meta.role==='teacher'&&<button className="text-link" onClick={()=>setEditing(true)}><PenLine size={15}/>{active.length?'Исправить или добавить свой пример':'Добавить пример'}</button>}{meta.role==='teacher'&&meta.ai&&<Button secondary disabled={generating} onClick={async()=>{setGenerating(true);await run(()=>api('/ai/cards/'+card.id+'/examples',{}),'Примеры добавлены. Проверьте их перед занятием.');setGenerating(false);}}><Sparkles size={15}/>{generating?'Готовим примеры…':'Дополнить с ИИ'}</Button>}</div>
         </>}
       </div>
-      {!!data?.originalExamples.length&&<details className="context-materials"><summary>Примеры из материалов · {card.source}</summary>{data.originalExamples.map((example,i)=><div className="material-example" key={i}><p lang="es">{example.es}<Sound text={example.es} notify={notify}/></p><p className="muted">{example.ru}</p>{example.tense&&<small>{example.tense}</small>}</div>)}</details>}
+      {!!data?.originalExamples.length&&<details className="context-materials"><summary>Примеры из материалов · {card.source}</summary>{data.originalExamples.map((example,i)=><div className="material-example" key={i}><p lang="es">{example.es}<Sound text={example.es} notify={notify}/></p><ExampleTranslation key={example.es} text={example.ru}/>{example.tense&&<small>{example.tense}</small>}</div>)}</details>}
       {editing&&<TenseExampleEditor card={card} tense={selected} example={active[0]} close={()=>setEditing(false)}/>}
     </>}
   </Panel>;
@@ -65,3 +66,5 @@ function TenseExampleEditor({card,tense,example,close}:{card:Card;tense:ExampleT
     e.preventDefault();setBusy(true);const result=await run(()=>api('/cards/'+card.id+'/tense-example',{tense,es,ru},'PUT'),'Пример сохранён');setBusy(false);if(result)close();
   }}><p className="small muted">Добавьте пример из своего урока. Он заменит стартовый пример только в выбранной вкладке.</p><Field label="Пример на испанском"><textarea lang="es" rows={3} value={es} onChange={e=>setEs(e.target.value)} required maxLength={4000}/></Field><Field label="Перевод примера"><textarea rows={3} value={ru} onChange={e=>setRu(e.target.value)} required maxLength={4000}/></Field><Button type="submit" disabled={busy||!es.trim()||!ru.trim()}>{busy?'Сохраняем…':'Сохранить пример'}</Button></form></Modal>;
 }
+
+function ExampleTranslation({text}:{text:string}){const [open,setOpen]=useState(false);return <div className="example-translation">{open&&<p className="tense-translation">{text}</p>}<button type="button" className="example-translation-toggle" aria-label={open?'Скрыть перевод примера':'Показать перевод примера'} onClick={()=>setOpen(!open)}>{open?<EyeOff size={18} strokeWidth={1.5}/>:<Eye size={18} strokeWidth={1.5}/>}</button></div>;}

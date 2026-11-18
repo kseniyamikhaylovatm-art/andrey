@@ -42,24 +42,25 @@ test('recall stays silent until hint, grades schedule SRS, and a known word read
  expect(updated.stage).toBe(card.stage+1);expect(Date.parse(updated.due)-Date.now()).toBeGreaterThan(23*3600000);
  await page.getByRole('button',{name:'Следующая фраза',exact:false}).click();
  const spoken=(await audit(page)).spoken.length;await page.waitForTimeout(550);expect((await audit(page)).spoken).toHaveLength(spoken);
- const second=await page.locator('.flashcard-word h2').innerText();await hint(page);await grade(page,false);
- await expect(page.locator('.answer-feedback')).toContainText('10 минут');
- await expect.poll(async()=>(await audit(page)).tones.length).toBe(4);
- expect((await audit(page)).tones.slice(2).map(t=>t.frequency)).toEqual([220,164.81]);
- await page.waitForTimeout(550);expect((await audit(page)).spoken.at(-1)?.text).toBe(second);
- const after=(await (await page.request.get('/api/state')).json()).state;const failed=after.cards.find((c:{es:string})=>c.es===second);expect(failed.stage).toBe(0);expect(Date.parse(failed.due)-Date.now()).toBeLessThanOrEqual(600000);
- await page.getByRole('switch',{name:'Звуки ответов'}).click();await page.getByRole('switch',{name:'Автоозвучка слов'}).click();
- await page.getByRole('button',{name:'Следующая фраза',exact:false}).click();const count=(await audit(page)).spoken.length;await hint(page);await grade(page);
- await expect(page.locator('.answer-feedback')).toContainText('Поздравляем');await page.waitForTimeout(650);
- expect((await audit(page)).spoken).toHaveLength(count);expect((await audit(page)).tones).toHaveLength(4);
+ const second=await page.locator('.flashcard-word h2').innerText();const secondCard=state.cards.find((card:{es:string})=>card.es===second);
+ await expect(page.locator('.picture-choice')).toHaveCount(4);const wrong=page.locator('.picture-choice').filter({hasNotText:secondCard.ru}).first();await wrong.click();
+ await expect(page.locator('.answer-feedback')).toContainText('Попробуйте ещё раз');await expect.poll(async()=>(await audit(page)).tones.length).toBe(4);
+ expect((await audit(page)).tones.slice(2).map(t=>t.frequency)).toEqual([220,164.81]);await expect(page.getByRole('button',{name:'Следующая фраза',exact:false})).toHaveCount(0);
+ const afterWrong=(await (await page.request.get('/api/state')).json()).state.cards.find((c:{id:string})=>c.id===secondCard.id);const due=afterWrong.due;
+ await page.locator('.picture-choice').filter({hasText:secondCard.ru}).click();await expect(page.locator('.answer-feedback')).toContainText('Теперь верно');await expect.poll(async()=>(await audit(page)).tones.length).toBe(6);
+ const corrected=(await (await page.request.get('/api/state')).json()).state.cards.find((c:{id:string})=>c.id===secondCard.id);expect(corrected.stage).toBe(0);expect(corrected.due).toBe(due);
+ await page.getByRole('switch',{name:'Звуки ответов'}).click();await page.getByRole('switch',{name:'Автоозвучка слов'}).click();await page.getByRole('button',{name:'Следующая фраза',exact:false}).click();
+ await expect(page.locator('.flashcard-word h2')).toHaveAttribute('lang','ru');const count=(await audit(page)).spoken.length,prompt=await page.locator('.flashcard-word h2').innerText(),third=state.cards.find((c:{ru:string})=>c.ru===prompt);
+ await page.locator('.picture-choice').filter({hasText:third.es}).click();await expect(page.locator('.answer-feedback')).toContainText('Поздравляем');await page.waitForTimeout(650);
+ expect((await audit(page)).spoken).toHaveLength(count);expect((await audit(page)).tones).toHaveLength(6);
  await page.locator('.flashcard-word').getByRole('button',{name:'Озвучить медленно',exact:true}).click();expect((await audit(page)).spoken.at(-1)?.rate).toBeCloseTo(0.65);
  await page.reload();await expect(page.getByRole('switch',{name:'Автоозвучка слов'})).not.toBeChecked();await expect(page.getByRole('switch',{name:'Звуки ответов'})).not.toBeChecked();
 });
 test('a failed self-review request produces no signal or example and lets the learner retry',async({page})=>{
  await observeAudio(page);await page.goto('/#cards?view=train');await page.getByRole('button',{name:'Начать тренировку',exact:true}).click();await hint(page);
- await page.route('**/api/review/self',route=>route.fulfill({status:503,json:{error:'Сохранение временно недоступно'}}));await grade(page);
+ await page.route('**/api/practice/answer',route=>route.fulfill({status:503,json:{error:'Сохранение временно недоступно'}}));await grade(page);
  await expect(page.getByRole('status').filter({hasText:'Сохранение временно недоступно'})).toBeVisible();expect((await audit(page)).tones).toHaveLength(0);
- await expect(page.getByRole('button',{name:'Вспомнил',exact:true})).toBeEnabled();await page.unroute('**/api/review/self');await grade(page);
+ await expect(page.getByRole('button',{name:'Вспомнил',exact:true})).toBeEnabled();await page.unroute('**/api/practice/answer');await grade(page);
  await expect(page.locator('.answer-feedback')).toContainText('Поздравляем');await expect.poll(async()=>(await audit(page)).tones.length).toBe(2);
 });
 test('a new question cancels the pending example and mobile recall controls stay readable',async({page})=>{

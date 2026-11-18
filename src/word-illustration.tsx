@@ -1,4 +1,5 @@
 import {useState} from 'react';
+import {CircleHelp} from 'lucide-react';
 import type {Card} from './types';
 /** Small local scenes; no external image search or paid image generation. */
 function scene(card:Card){const value=(card.es+' '+card.ru).toLocaleLowerCase('es');
@@ -13,7 +14,8 @@ function scene(card:Card){const value=(card.es+' '+card.ru).toLocaleLowerCase('e
  if(/famil|herman|madre|hijo|familia|семь|брат|мать|ребён/.test(value))return 'people';
  return 'book';
 }
-export function CardIllustration({card}:{card:Card}){const [failed,setFailed]=useState('');const kind=scene(card);
+export function CardIllustration({card,concealed=false}:{card:Card;concealed?:boolean}){const [failed,setFailed]=useState('');const kind=scene(card);
+ if(concealed)return <span className="choice-illustration concealed-illustration" aria-hidden="true"><CircleHelp size={38} strokeWidth={1.3}/></span>;
  if(card.imageUrl&&failed!==card.imageUrl)return <span className="choice-illustration"><img src={card.imageUrl} alt="" loading="lazy" referrerPolicy="no-referrer" onError={()=>setFailed(card.imageUrl||'')}/></span>;
  return <span className={'choice-illustration scene-'+kind}><svg viewBox="0 0 180 120" aria-hidden="true" focusable="false"><rect x="4" y="4" width="172" height="112" rx="20" fill="#f3e8d6"/><circle cx="139" cy="28" r="14" fill="#e4c98f" opacity=".65"/><path d="M18 100h144" stroke="#d0b88c" strokeWidth="2"/>
  <g stroke="#244457" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round">
