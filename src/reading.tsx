@@ -2,6 +2,7 @@ import {lazy,Suspense,useEffect,useRef,useState} from 'react';
 import {ArrowLeft,BookOpen,Plus,Upload} from 'lucide-react';
 import {useApp} from './context';
 import {readRoute} from './navigation';
+import {ReadingPracticePage} from './reading-practice';
 const PdfReader=lazy(()=>import('./pdf-reader').then(module=>({default:module.PdfReader})));
 import type {ReadingBook,ReadingLevel} from './types';
 import {Button,Empty,Field,Loading,Modal,Panel,SectionTitle} from './ui';
@@ -9,7 +10,7 @@ const levels:ReadingLevel[]=['A1-A2','B1-B2','C1-C2'];
 export function ReadingPage(){
  const {api,meta,go,notify}=useApp(),params=readRoute().params,level=params.get('level') as ReadingLevel|null,bookId=params.get('book'),[books,setBooks]=useState<ReadingBook[]>(),[adding,setAdding]=useState(false),[error,setError]=useState('');
  useEffect(()=>{let active=true;void api<{books:ReadingBook[]}>('/library/books').then(result=>{if(active)setBooks(result.books);}).catch(()=>{if(active)setError('Не удалось загрузить книги.');});return()=>{active=false;};},[api]);
- if(!level||!levels.includes(level))return <section className="reading-levels" aria-label="Уровни чтения">{levels.map(level=><button className="reading-level-card" key={level} onClick={()=>go('reading',{level})}><BookOpen size={32} strokeWidth={1.4}/><strong>{level.replace('-','–')}</strong></button>)}</section>;
+ if(!level||!levels.includes(level))return <><section className="reading-levels" aria-label="Уровни чтения">{levels.map(level=><button className="reading-level-card" key={level} onClick={()=>go('reading',{level})}><BookOpen size={32} strokeWidth={1.4}/><strong>{level.replace('-','–')}</strong></button>)}</section><ReadingPracticePage/></>;
  if(error)return <Panel><p role="alert">{error}</p></Panel>;if(!books)return <Loading/>;const book=books.find(book=>book.id===bookId);
  if(book)return <Suspense fallback={<Loading/>}><PdfReader key={book.id} book={book} initialPage={Number(params.get('page'))||undefined} close={()=>go('reading',{level:book.level})}/></Suspense>;
  const selected=books.filter(book=>book.level===level);
