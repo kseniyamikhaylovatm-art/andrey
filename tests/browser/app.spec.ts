@@ -19,9 +19,9 @@ test('study, conjugate, track lessons and retain progress after reload',async({p
  await page.getByRole('link',{name:'Слух',exact:true}).click();await expect(page.getByText('Полкило помидоров',{exact:false})).toHaveCount(0);await page.getByRole('textbox').fill('Покупатель хочет помидоры и апельсины.');await page.getByRole('button',{name:'Сравнить с образцом'}).click();await expect(page.getByText('Полкило помидоров',{exact:false})).toBeVisible();
  await page.getByRole('link',{name:'Прогресс',exact:true}).click();await expect(page.locator('.heatmap .heat-cell')).toHaveCount(84);expect(errors).toEqual([]);
 });
-test('all nine tabs work on a phone without horizontal overflow',async({page})=>{
+test('all ten tabs work on a phone without horizontal overflow',async({page})=>{
  await page.setViewportSize({width:390,height:844});await page.goto('/');
- for(const [tab,heading] of [['Слова','Слова'],['Кабинет','Кабинет преподавателя'],['Автоматизация','Слова, которые остаются'],['Глаголы','Глаголы без спешки'],['Речь','Ваш голос на испанском'],['Слух','Услышать и понять'],['Прогресс','Ваш испанский растёт'],['Оплата','Встречаемся и учимся'],['План','Сегодня']]){
+ for(const [tab,heading] of [['Слова','Слова'],['Кабинет','Кабинет преподавателя'],['Автоматизация','Слова, которые остаются'],['Глаголы','Глаголы без спешки'],['Речь','Ваш голос на испанском'],['Слух','Услышать и понять'],['Чтение','Чтение'],['Прогресс','Ваш испанский растёт'],['Оплата','Встречаемся и учимся'],['План','Сегодня']]){
   await page.getByRole('button',{name:'Открыть меню'}).click();await page.getByRole('link',{name:tab,exact:tab!=='Автоматизация'}).click();
   if(tab==='Глаголы')await page.getByRole('button',{name:'Закрыть',exact:true}).click();
   await expect(page.getByRole('heading',{name:heading,exact:true})).toBeVisible();
