@@ -16,12 +16,9 @@ function recent(s:AppState,days=7){return s.attempts.filter(a=>Date.now()-Date.p
 function accuracy(s:AppState,days=7){const a=recent(s,days).filter(a=>a.correct!==null);return a.length?percentage(a.filter(a=>a.correct).length,a.length)+'%':'—';}
 function Metrics(){const {api,state:s}=useApp(),a=recent(s);return <div className="stats-grid"><Stat label="Ответов за неделю" value={a.length} detail={a.length?'Каждый ответ — шаг вперёд':'Начнём с первого шага'} icon={<Layers size={19}/>}/><Stat label="Точность за неделю" value={accuracy(s)} detail="Карточки и формы глаголов" icon={<Target size={19}/>}/><Stat label="Минут практики" value={Math.round(a.reduce((n,v)=>n+v.seconds,0)/60)} detail="За последние 7 дней" icon={<Clock size={19}/>}/><Stat label="Фраз выучено" value={<>{s.cards.filter(c=>c.stage>=4).length}<span className="stat-of"> / {s.cards.length}</span></>} detail="Этап 4 из 6 и выше" icon={<TrendingUp size={19}/>}/></div>;}
 export function PlanPage(){
-  const {api,state:s}=useApp();const [modal,setModal]=useState('');
-  return <><StudyDashboard editPlan={()=>setModal('plan')} addDiary={()=>setModal('diary')} addCard={()=>setModal('card')} importCards={()=>setModal('pdf')}/>
+  const {state:s}=useApp();const [modal,setModal]=useState('');
+  return <><StudyDashboard editPlan={()=>setModal('plan')}/>
     {modal==='plan'&&<PlanEditor plan={s.plan} close={()=>setModal('')}/>}
-    {modal==='diary'&&<DiaryForm close={()=>setModal('')}/>}
-    {modal==='card'&&<CardEditor close={()=>setModal('')}/>}
-    {modal==='pdf'&&<CardImportModal close={()=>setModal('')}/>}
   </>;
 }
 export function StudentLessonsPage(){const {state:s,go}=useApp();return <><SectionTitle eyebrow="" title="Мои уроки" description="Материалы занятий и задания преподавателя"/><PracticeProgress/>{s.lessons.length?s.lessons.slice().sort((a,b)=>b.date.localeCompare(a.date)).map(lesson=><Panel key={lesson.id}><div className="section-heading"><h2>{lesson.title}</h2><Badge>{formatDate(lesson.date,true)}</Badge></div><p className="small muted">{lesson.status==='held'?'Состоялся':lesson.status==='cancelled'?'Отменён':'Запланирован'}</p>{lesson.note&&<p className="prose">{lesson.note}</p>}{lesson.text&&<details><summary>Материалы урока</summary><div className="prose lesson-text">{lesson.text}</div></details>}{!!lesson.cardIds?.length&&<Button secondary onClick={()=>go('words',{lesson:lesson.id})}>Слова этого урока <ArrowRight size={17}/></Button>}{lesson.video&&<a href={lesson.video} target="_blank" rel="noreferrer">Открыть видео</a>}</Panel>):<Panel><Empty>Преподаватель добавит сюда материалы ваших занятий.</Empty></Panel>}</>;}

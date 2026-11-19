@@ -1,6 +1,6 @@
 import React,{useCallback,useEffect,useMemo,useState} from 'react';
 import {createRoot} from 'react-dom/client';
-import {Mic,ArrowUpRight,Info,Check,RefreshCw,LogOut,Download,Menu,X,Users} from 'lucide-react';
+import {ArrowUpRight,Info,Check,RefreshCw,LogOut,Download,Menu,X,Users} from 'lucide-react';
 import {AppContext,tabs,type Tab} from './context';
 import {readRoute,routeHash} from './navigation';
 import type {AppState,AccessSession,WorkspaceMeta} from './types';
@@ -38,7 +38,7 @@ function App(){
 function TrialNotice(){return <div className="notice" role="note"><Info size={19}/><span><strong>Пробная версия.</strong> После сна или перезапуска сайта данные могут сброситься. Для постоянной работы с учениками нужно постоянное хранилище.</span></div>;}
 
 function WorkspaceHeader({teacher,name,children,logout}:{teacher:boolean;name?:string;children?:React.ReactNode;logout?:()=>void}){
-  return <header className={'workspace-header '+(!name?'teacher-roster-header':'')}><div className="masthead"><a className="masthead-brand" href="#plan"><span className="brand-monogram" aria-hidden="true">ñ</span><span><strong>MI ESPAÑOL</strong><small>Слова, фразы и грамматика из занятий</small></span></a><div className="masthead-actions"><span className="header-pill workspace-access">{teacher?'Преподаватель':'Ученик'}</span>{children}{logout&&<button aria-label="Выйти" className="icon-btn" onClick={logout}><LogOut size={18}/></button>}<span className="profile-medallion" title={name||'Преподаватель'}>{name?name.split(' ').slice(0,2).map(part=>part[0]).join('').toUpperCase():'П'}</span></div></div></header>;
+  return <header className={'workspace-header '+(!name?'teacher-roster-header':'')}><div className="masthead"><a className="masthead-brand" href="#plan"><span className="brand-monogram" aria-hidden="true">ñ</span><span><strong>MI ESPAÑOL</strong></span></a><div className="masthead-actions"><span className="header-pill workspace-access">{teacher?'Преподаватель':'Ученик'}</span>{children}{logout&&<button aria-label="Выйти" className="icon-btn" onClick={logout}><LogOut size={18}/></button>}<span className="profile-medallion" title={name||'Преподаватель'}>{name?name.split(' ').slice(0,2).map(part=>part[0]).join('').toUpperCase():'П'}</span></div></div></header>;
 }
 
 function StudentWorkspace({studentId,session,notify,expired,logout,roster}:{studentId:string;session:AccessSession;notify:(message:string)=>void;expired:()=>void;logout:()=>void;roster:()=>void}){
@@ -57,7 +57,6 @@ function StudentWorkspace({studentId,session,notify,expired,logout,roster}:{stud
   return <AppContext.Provider value={{...data,api:client,uploadPdf:file=>uploadPdf(file,studentId),refresh,notify,go,run}}><div className="app-shell">
     <WorkspaceHeader teacher={teacher} name={data.meta.student.name} logout={data.meta.protected?logout:undefined}>
       {teacher&&<button className="header-pill students-link" onClick={roster}><Users size={18}/>Мои ученики</button>}
-      <button className="header-pill voice-link" onClick={()=>go('speech')} title="Открыть речевую практику"><Mic size={18}/><span>Голос</span></button>
       <button className="icon-btn" title="Обновить данные" aria-label="Обновить данные" onClick={()=>void refresh().catch(()=>{})}><RefreshCw size={18}/></button>
       <a href={exportURL} className="icon-btn" title="Скачать резервную копию" aria-label="Скачать резервную копию"><Download size={19}/></a>
       <button className="icon-btn navigation-toggle" aria-label={mobile?'Закрыть меню':'Открыть меню'} aria-expanded={mobile} aria-controls="main-navigation" onClick={()=>setMobile(!mobile)}>{mobile?<X size={24}/>:<Menu size={24}/>}</button>

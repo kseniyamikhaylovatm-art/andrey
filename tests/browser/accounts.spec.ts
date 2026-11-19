@@ -24,7 +24,7 @@ test('teacher creates private student spaces; a student signs in, practices and 
     await expect(student.getByRole('link',{name:'Уроки',exact:true})).toBeVisible();
     expect((await student.request.get('/api/students')).status()).toBe(403);
     expect((await student.request.get('/api/state',{headers:{'X-Student-Id':pavel.id}})).status()).toBe(403);
-    await student.getByRole('button',{name:'Новые слова · 24',exact:true}).click();
+    await student.getByRole('link',{name:/^Автоматизация/}).click();await student.getByRole('button',{name:'Упражнения формат 17 языков',exact:true}).click();
     await student.getByRole('button',{name:'Начать тренировку',exact:true}).click();
     const own=(await (await student.request.get('/api/state')).json()).state;
     const word=await student.locator('.flashcard-word h2').innerText(),card=own.cards.find((item:{es:string})=>item.es===word);
@@ -42,11 +42,11 @@ test('teacher creates private student spaces; a student signs in, practices and 
 test('teacher switching keeps card imports, exports and unsent speech drafts in the selected student space',async({page})=>{
   await login(page,'teacher-browser-code-for-tests');
   const first=page.locator('.student-card').filter({has:page.getByRole('heading',{name:'Мария',exact:true})});await first.getByRole('button',{name:'Открыть кабинет'}).click();
-  await page.getByRole('textbox',{name:'Слово и перевод',exact:true}).fill('el lápiz — карандаш');await page.getByRole('button',{name:'Добавить',exact:true}).click();await expect(page.getByRole('status')).toContainText('Карточка добавлена');
+  await page.getByRole('link',{name:/^Автоматизация/}).click();await page.getByRole('button',{name:'Загрузить PDF карточек',exact:true}).click();await page.getByRole('textbox',{name:'Список карточек',exact:false}).fill('el lápiz — карандаш');await page.getByRole('button',{name:'Проверить список',exact:true}).click();await page.getByRole('button',{name:'Добавить все карточки',exact:true}).click();await expect(page.getByRole('dialog').getByRole('status')).toContainText('Добавлено: 1');await page.getByRole('dialog').getByRole('button',{name:'Закрыть',exact:true}).click();
   await page.getByRole('link',{name:'Речь',exact:true}).click();await page.getByRole('textbox',{name:'Ваш ответ · текстом или голосом'}).fill('Private draft of Maria');
   await page.getByRole('button',{name:'Мои ученики',exact:true}).first().click();
   await page.locator('.student-card').filter({has:page.getByRole('heading',{name:'Павел',exact:true})}).getByRole('button',{name:'Открыть кабинет'}).click();
-  await expect(page.locator('.student-name')).toContainText('Павел');await expect(page.getByText('Всего в базе: 0 карточек',{exact:true})).toBeVisible();
+  await expect(page.locator('.student-name')).toContainText('Павел');await expect(page.getByRole('heading',{name:'План на месяц',exact:true})).toBeVisible();
   await page.getByRole('link',{name:'Речь',exact:true}).click();await expect(page.getByRole('textbox',{name:'Ваш ответ · текстом или голосом'})).toHaveValue('');
   const href=await page.getByRole('link',{name:'Скачать резервную копию',exact:true}).first().getAttribute('href');
   const backup=await (await page.request.get(href!)).json();expect(backup.student.name).toBe('Павел');expect(backup.state.cards).toHaveLength(0);

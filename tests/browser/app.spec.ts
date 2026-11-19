@@ -2,7 +2,7 @@ import {test,expect} from '@playwright/test';
 test('study, conjugate, track lessons and retain progress after reload',async({page})=>{
  const errors:string[]=[];page.on('pageerror',e=>errors.push(e.message));
  await page.goto('/');await expect(page.getByRole('heading',{name:'Сегодня',exact:true})).toBeVisible();
- await page.getByRole('button',{name:'Начать практику'}).click();await page.getByRole('button',{name:'Начать тренировку',exact:true}).click();
+ await page.getByRole('link',{name:/^Автоматизация/}).click();await page.getByRole('button',{name:'Упражнения формат 17 языков',exact:true}).click();await page.getByRole('button',{name:'Начать тренировку',exact:true}).click();
  const word=await page.locator('.flashcard-word h2').innerText();const {state}=await (await page.request.get('/api/state')).json();const card=state.cards.find((c:{es:string})=>c.es===word);
  await page.getByRole('button',{name:'Подсказка',exact:true}).click();await page.getByRole('button',{name:'Вспомнил',exact:true}).click();await expect(page.getByRole('status').filter({hasText:'¡Muy bien!'})).toBeVisible();
  await expect(page.locator('.example')).toBeVisible();await page.reload();await expect(page.getByRole('heading',{name:'Слова, которые остаются'})).toBeVisible();
