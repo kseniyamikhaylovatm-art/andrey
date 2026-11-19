@@ -1,4 +1,4 @@
-import {test,expect,type Page} from '@playwright/test';
+import {test,expect,type Page} from './fixtures';
 
 /** Headless Chromium has no installed TTS engine; retain real Web Audio playback. */
 async function observeAudio(page:Page){

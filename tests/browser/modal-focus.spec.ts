@@ -1,4 +1,4 @@
-import {test,expect} from '@playwright/test';
+import {test,expect} from './fixtures';
 test.use({baseURL:'http://127.0.0.1:3101'});
 test('student name keeps focus through character typing, editing and Escape',async({page})=>{
  await page.request.post('/api/login',{data:{code:'teacher-browser-code-for-tests'}});await page.goto('/');

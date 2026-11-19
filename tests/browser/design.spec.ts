@@ -1,4 +1,4 @@
-import {test,expect} from '@playwright/test';
+import {test,expect} from './fixtures';
 
 test('the navy and gold cabinet keeps genuine metrics and working teacher actions',async({page})=>{
   await page.setViewportSize({width:1586,height:1100});await page.goto('/#cabinet');

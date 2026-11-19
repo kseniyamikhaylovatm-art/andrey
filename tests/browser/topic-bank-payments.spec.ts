@@ -1,4 +1,4 @@
-import {test,expect,type Page} from '@playwright/test';
+import {test,expect,type Page} from './fixtures';
 test.use({baseURL:'http://127.0.0.1:3101'});
 async function workspace(page:Page){
  await page.request.post('/api/login',{data:{code:'teacher-browser-code-for-tests'}});

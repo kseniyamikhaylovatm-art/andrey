@@ -65,6 +65,7 @@ export interface PracticeSession {id:string;format:PracticeFormat;startedAt:stri
 
 export interface MonthlyBaseline {aspect:LanguageAspect;method:'test'|'notes'|'other';task:string;result:string;url:string}
 export interface MonthlyPlan {
+ layoutVersion?:2;startedOn?:string;archivedAt?:string;skills?:string;topics?:string;situations?:string;pointA?:string;
  id:string;revision:number;month:string;goal:string;aspects:LanguageAspect[];topicsSkills:string;successCriteria:string;baselineDate:string;reviewOn:string;baselines:MonthlyBaseline[];createdAt:string;updatedAt:string;
  reflection?:{text:string;results:{aspect:LanguageAspect;result:string}[];submittedAt:string;updatedAt:string};
 }

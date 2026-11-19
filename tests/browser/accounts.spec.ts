@@ -1,4 +1,4 @@
-import {test,expect,type Page} from '@playwright/test';
+import {test,expect,dismissMonthlyPrompts,type Page} from './fixtures';
 test.use({baseURL:'http://127.0.0.1:3101'});
 async function login(page:Page,code:string){await page.goto('/');await page.getByLabel('Личный код доступа', {exact:true}).fill(code);await page.getByRole('button',{name:'Войти',exact:true}).click();}
 async function createStudent(page:Page,name:string,examples=false){
@@ -16,7 +16,7 @@ test('teacher creates private student spaces; a student signs in, practices and 
   const code=await createStudent(page,'Мария',true);await createStudent(page,'Павел');
   const roster=(await (await page.request.get('/api/students')).json()).students;
   const maria=roster.find((item:{name:string})=>item.name==='Мария'),pavel=roster.find((item:{name:string})=>item.name==='Павел');
-  const context=await browser.newContext({baseURL:'http://127.0.0.1:3101'}),student=await context.newPage();
+  const context=await browser.newContext({baseURL:'http://127.0.0.1:3101'}),student=await context.newPage();await dismissMonthlyPrompts(student);
   try{
     await login(student,code);await expect(student.locator('.student-name')).toContainText('Мария');
     await expect(student.getByRole('button',{name:'Мои ученики',exact:true})).toHaveCount(0);
@@ -58,7 +58,7 @@ test('teacher switching keeps card imports, exports and unsent speech drafts in 
 test('mobile teacher can issue a replacement code; the old login expires and the new code keeps the same cabinet',async({page,browser})=>{
   await page.setViewportSize({width:390,height:844});await login(page,'teacher-browser-code-for-tests');
   await expect(page.getByRole('button',{name:'Выйти',exact:true})).toBeVisible();
-  const old=await createStudent(page,'Елена');const context=await browser.newContext({baseURL:'http://127.0.0.1:3101'}),student=await context.newPage();
+  const old=await createStudent(page,'Елена');const context=await browser.newContext({baseURL:'http://127.0.0.1:3101'}),student=await context.newPage();await dismissMonthlyPrompts(student);
   try{
     await login(student,old);await expect(student.locator('.student-name')).toContainText('Елена');
     await page.locator('.student-card').filter({has:page.getByRole('heading',{name:'Елена',exact:true})}).getByRole('button',{name:'Новый код входа'}).click();

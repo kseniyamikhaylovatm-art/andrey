@@ -1,4 +1,4 @@
-import {test,expect} from '@playwright/test';
+import {test,expect} from './fixtures';
 test('known recall uses a level-specific saved example, generates a missing one once and reuses it next time',async({page})=>{
  const spoken:string[]=[];
  await page.exposeFunction('recordRecallSpeech',(text:string)=>spoken.push(text));

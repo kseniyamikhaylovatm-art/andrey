@@ -1,4 +1,4 @@
-import {test,expect,type Page} from '@playwright/test';
+import {test,expect,dismissMonthlyPrompts,type Page} from './fixtures';
 test.use({baseURL:'http://127.0.0.1:3101'});
 async function openNewStudent(page:Page,name:string){
   await page.request.post('/api/login',{data:{code:'teacher-browser-code-for-tests'}});
@@ -39,7 +39,7 @@ test('teacher keeps dated lesson lists and trains all words of the selected less
 test('a student sees live lesson vocabulary on a phone and can practice even the first word in an empty cabinet',async({page,browser})=>{
   const result=await openNewStudent(page,'Первый урок · отдельный ученик');await page.getByLabel('Дата урока',{exact:true}).fill('2026-11-17');await record(page,'la puerta — дверь');
   const own=(await (await page.request.get('/api/state',{headers:{'X-Student-Id':result.student.id}})).json()).state;
-  const context=await browser.newContext({baseURL:'http://127.0.0.1:3101',viewport:{width:390,height:844}}),student=await context.newPage();
+  const context=await browser.newContext({baseURL:'http://127.0.0.1:3101',viewport:{width:390,height:844}}),student=await context.newPage();await dismissMonthlyPrompts(student);
   try{
     await student.goto('/');await student.getByLabel('Личный код доступа',{exact:true}).fill(result.code);await student.getByRole('button',{name:'Войти',exact:true}).click();
     await student.getByRole('button',{name:'Открыть меню'}).click();await student.getByRole('link',{name:'Слова',exact:true}).click();

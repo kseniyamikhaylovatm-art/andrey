@@ -1,3 +1,4 @@
+import {MonthlyCheckIn} from './monthly-plans';
 import React,{useCallback,useEffect,useMemo,useState} from 'react';
 import {createRoot} from 'react-dom/client';
 import {ArrowUpRight,Info,Check,RefreshCw,LogOut,Download,Menu,X,Users} from 'lucide-react';
@@ -54,7 +55,7 @@ function StudentWorkspace({studentId,session,notify,expired,logout,roster}:{stud
   if(!data)return <Loading/>;
   const Page=tab==='cabinet'&&!teacher?StudentLessonsPage:components[tab],due=data.state.cards.filter(c=>c.enabled&&(c.seen===0||Date.parse(c.due)<=Date.now())).length;
   const available=tabs,exportURL='/api/export?studentId='+encodeURIComponent(studentId);
-  return <AppContext.Provider value={{...data,api:client,uploadPdf:file=>uploadPdf(file,studentId),refresh,notify,go,run}}><div className="app-shell">
+  return <AppContext.Provider value={{...data,api:client,uploadPdf:file=>uploadPdf(file,studentId),refresh,notify,go,run}}><div className="app-shell"><MonthlyCheckIn/>
     <WorkspaceHeader teacher={teacher} name={data.meta.student.name} logout={data.meta.protected?logout:undefined}>
       {teacher&&<button className="header-pill students-link" onClick={roster}><Users size={18}/>Мои ученики</button>}
       <button className="icon-btn" title="Обновить данные" aria-label="Обновить данные" onClick={()=>void refresh().catch(()=>{})}><RefreshCw size={18}/></button>
