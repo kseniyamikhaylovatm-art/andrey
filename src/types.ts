@@ -1,3 +1,4 @@
+import type {LanguageAspect} from './monthly-plan-utils';
 export const topics = ['Всё', 'В городе', 'Дом и соседи', 'Рынок', 'Сёрфинг', 'Путешествия', 'Повседневное'];
 export const tenseNames = {
   presente: 'Presente',
@@ -47,7 +48,7 @@ export interface Dialog { id: string; date: string; topic: string; focus: string
 export interface AudioItem { id: string; title: string; url: string; transcript: string; question: string; answer: string; topic: string }
 export interface Plan { miroBoardUrl?:string; level: string; goal: string; goals: { skill: string; now: string; target: string }[]; criteria: string[]; topics: string[] }
 export interface AppState {
-  practiceSessions?:PracticeSession[];cards: Card[]; attempts: Attempt[]; lessons: Lesson[]; assignments: Assignment[]; diary: Diary[];
+  monthlyPlans?:MonthlyPlan[];practiceSessions?:PracticeSession[];cards: Card[]; attempts: Attempt[]; lessons: Lesson[]; assignments: Assignment[]; diary: Diary[];
   speeches: SpeechRecord[]; dialogs: Dialog[]; audios: AudioItem[]; payments: Payment[];
   plan: Plan; verbTables: Record<string, Partial<Record<Tense, string[]>>>;
   summary: { text: string; date: string } | null;
@@ -61,3 +62,9 @@ export interface PaymentSummary {paid:number;used:number;remaining:number;last:s
 
 export type PracticeFormat='seventeen'|'duolingo'|'anki';
 export interface PracticeSession {id:string;format:PracticeFormat;startedAt:string;finishedAt?:string;total:number;topic?:string;lessonId?:string}
+
+export interface MonthlyBaseline {aspect:LanguageAspect;method:'test'|'notes'|'other';task:string;result:string;url:string}
+export interface MonthlyPlan {
+ id:string;revision:number;month:string;goal:string;aspects:LanguageAspect[];topicsSkills:string;successCriteria:string;baselineDate:string;reviewOn:string;baselines:MonthlyBaseline[];createdAt:string;updatedAt:string;
+ reflection?:{text:string;results:{aspect:LanguageAspect;result:string}[];submittedAt:string;updatedAt:string};
+}

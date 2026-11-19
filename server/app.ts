@@ -1,3 +1,4 @@
+import {createMonthlyPlan,updateMonthlyPlan,reflectMonthlyPlan} from './monthly-plans.js';
 import {AnkiSessions} from './anki-practice.js';
 import {beginPractice,recordPractice,finishPractice} from './practice-rewards.js';
 import {MixedPracticeSessions} from './mixed-practice.js';
@@ -93,6 +94,7 @@ export function createApp(store:Store) {
     if((res.locals.principal as Principal).role==='teacher'||['GET','HEAD','OPTIONS'].includes(req.method)){next();return;}
     const permitted=(req.method==='POST'&&['/anki/start','/anki/answer','/practice/start','/practice/answer','/practice/next','/lingva/start','/lingva/answer','/review','/review/self','/review/choice','/verbs/review','/diary','/listening/review','/ai/speech','/ai/dialog','/ai/listening','/import/pdf','/import/cards/preview','/import/cards/confirm'].includes(req.path))
       ||(req.method==='POST'&&/^\/ai\/cards\/[^/]+\/word-example$/.test(req.path))
+      ||(req.method==='POST'&&/^\/monthly-plans\/[^/]+\/reflection$/.test(req.path))
       ||(req.method==='PATCH'&&/^\/assignments\/[^/]+$/.test(req.path));
     if(req.method==='PATCH'&&/^\/cards\/[^/]+$/.test(req.path)){
       req.body=z.object({focused:z.boolean()}).strict().parse(req.body);next();return;
@@ -138,6 +140,9 @@ export function createApp(store:Store) {
   app.get('/api/verbs/table',(req,res)=>{const v=str.parse(req.query.verb),t=tense.parse(req.query.tense);const forms=store.read().verbTables[v]?.[t]||conjugate(v,t);res.json({forms,irregular:['ser','estar','tener','hacer','ir','decir','ver','contar','llegar'].includes(v),source:store.read().verbTables[v]?.[t]?'Таблица преподавателя / Claude':'Проверенная стартовая таблица'});});
   app.put('/api/verbs/table',(req,res)=>{const p=z.object({verb:str,tense,forms:z.array(str).length(6)}).parse(req.body);store.mutate(s=>{s.verbTables[p.verb]??={};s.verbTables[p.verb][p.tense]=p.forms;});res.json({ok:true});});
   app.post('/api/verbs/review',(req,res)=>{const p=z.object({verb:str,tense,answers:z.array(z.string().max(500)).length(6),seconds}).parse(req.body);res.json(store.mutate(s=>{const forms=s.verbTables[p.verb]?.[p.tense]||conjugate(p.verb,p.tense);if(!forms)throw new AppError(400,'Сначала создайте таблицу для этого глагола.');const results=forms.map((f,i)=>normalize(f)===normalize(p.answers[i]));results.forEach((correct,i)=>s.attempts.push({id:id(),kind:'verb',at:new Date().toISOString(),correct,seconds:p.seconds/6,verb:p.verb,tense:p.tense,answer:p.answers[i],topic:'Грамматика'}));return {forms,results};}));});
+  app.post('/api/monthly-plans',teacherOnly,(req,res)=>res.status(201).json(createMonthlyPlan(store,req.body)));
+  app.patch('/api/monthly-plans/:id',teacherOnly,(req,res)=>res.json(updateMonthlyPlan(store,z.string().parse(req.params.id),req.body)));
+  app.post('/api/monthly-plans/:id/reflection',(req,res)=>{if((res.locals.principal as Principal).role!=='student')throw new AppError(403,'Саморефлексию заполняет ученик в своём кабинете.');res.json(reflectMonthlyPlan(store,z.string().parse(req.params.id),req.body));});
   app.put('/api/plan',(req,res)=>{const p=planSchema.parse(req.body);store.mutate(s=>{s.plan=p;});res.json({ok:true});});
   app.post('/api/lessons',(req,res)=>{const p=lessonInput.parse(req.body);const item={...p,id:id()};store.mutate(s=>{s.lessons.push(item);});res.json(item);});
   app.patch('/api/lessons/:id',(req,res)=>{const p=lessonInput.partial().parse(req.body);store.mutate(s=>Object.assign(find(s.lessons,req.params.id),p));res.json({ok:true});});

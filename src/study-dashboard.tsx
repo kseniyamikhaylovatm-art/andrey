@@ -1,3 +1,4 @@
+import {MonthlyPlans} from './monthly-plans';
 import {useState} from 'react';
 import {ArrowRight,BookOpen,CalendarDays,CheckCircle2,Headphones,Layers,MessageCircle,Mic,Plus,Target} from 'lucide-react';
 import {formatDate,percentage} from './api';
@@ -17,6 +18,7 @@ export function StudyDashboard({editPlan,addDiary,addCard,importCards}:Actions){
   const labels={learned:'Выучено',learning:'Учу',difficult:'Трудные',new:'Новые'};
   return <>
     <SectionTitle eyebrow="" title="Сегодня" description={date} action={<Button disabled={!active} onClick={()=>go('cards',{mode:practiceMode})}>Начать практику <ArrowRight size={18}/></Button>}/>
+    <MonthlyPlans/>
     <div className="study-top-grid">
       <Panel className="study-start-panel">
         <h2>Карточки на сегодня</h2>
