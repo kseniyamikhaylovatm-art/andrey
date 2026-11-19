@@ -60,8 +60,8 @@ export interface WorkspaceMeta {ai:boolean;protected:boolean;verbs:string[];demo
 export interface Payment {id:string;date:string;lessons?:number;note?:string}
 export interface PaymentSummary {paid:number;used:number;remaining:number;last:string|null}
 
-export type PracticeFormat='seventeen'|'duolingo'|'anki';
-export interface PracticeSession {id:string;format:PracticeFormat;startedAt:string;finishedAt?:string;total:number;topic?:string;lessonId?:string}
+export type PracticeFormat='seventeen'|'duolingo'|'anki'|'quizlet';
+export interface PracticeSession {quizletMode?:import('./quizlet-types').QuizletMode;direction?:import('./quizlet-types').QuizletDirection;id:string;format:PracticeFormat;startedAt:string;finishedAt?:string;total:number;topic?:string;lessonId?:string}
 
 export interface MonthlyBaseline {aspect:LanguageAspect;method:'test'|'notes'|'other';task:string;result:string;url:string}
 export interface MonthlyPlan {

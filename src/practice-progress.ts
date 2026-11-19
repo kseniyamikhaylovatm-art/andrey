@@ -1,7 +1,7 @@
 import type {AppState,Attempt,PracticeFormat,PracticeSession} from './types';
 import {madridDay,practiceStreak} from './study-stats';
-export const practiceFormatNames:Record<PracticeFormat,string>={seventeen:'Упражнения формат 17 языков',duolingo:'Упражнение формат дуолинго',anki:'Формат Анки'};
-export const practiceFormatIds:PracticeFormat[]=['seventeen','duolingo','anki'];
+export const practiceFormatNames:Record<PracticeFormat,string>={seventeen:'Упражнения формат 17 языков',duolingo:'Упражнение формат дуолинго',anki:'Формат Анки',quizlet:'Формат Quizlet'};
+export const practiceFormatIds:PracticeFormat[]=['seventeen','duolingo','anki','quizlet'];
 export function attemptFormat(attempt:Attempt):PracticeFormat|undefined{return attempt.format||(attempt.id.startsWith('mixed:')?'seventeen':attempt.id.startsWith('lingva:')?'duolingo':undefined);}
 export function practiceProgress(state:AppState,now=new Date()){
  const valid=state.attempts.filter(attempt=>Date.parse(attempt.at)<=+now&&attemptFormat(attempt));const today=madridDay(now),sessions=state.practiceSessions||[];

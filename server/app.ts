@@ -1,5 +1,6 @@
 import {ReadingLibrary,readingLevel,addReadingWord,updateReadingTranslation,translateReadingWords,generateReadingPractice} from './reading.js';
 import {createMonthlyPlan,updateMonthlyPlan,reflectMonthlyPlan} from './monthly-plans.js';
+import {QuizletSessions} from './quizlet.js';
 import {AnkiSessions} from './anki-practice.js';
 import {beginPractice,recordPractice,finishPractice} from './practice-rewards.js';
 import {MixedPracticeSessions} from './mixed-practice.js';
@@ -41,6 +42,7 @@ function newCard(input:z.infer<typeof cardInput>):Card {return {...input,id:id()
 export function createApp(store:Store) {
   const mixedPractice=new MixedPracticeSessions();
   const anki=new AnkiSessions();
+  const quizlet=new QuizletSessions();
   const library=new ReadingLibrary(store);
   const app=express(); app.disable('x-powered-by');
   const access=accessControl(store);
@@ -94,7 +96,7 @@ export function createApp(store:Store) {
   // Enforce permissions on the server, including requests made outside the interface.
   app.use('/api',(req,res,next)=>{
     if((res.locals.principal as Principal).role==='teacher'||['GET','HEAD','OPTIONS'].includes(req.method)){next();return;}
-    const permitted=(req.method==='POST'&&['/reading/words','/ai/reading/translate','/ai/reading/practice','/monthly-plans','/anki/start','/anki/answer','/practice/start','/practice/answer','/practice/next','/lingva/start','/lingva/answer','/review','/review/self','/review/choice','/verbs/review','/diary','/listening/review','/ai/speech','/ai/dialog','/ai/listening','/import/pdf','/import/cards/preview','/import/cards/confirm'].includes(req.path))
+    const permitted=(req.method==='POST'&&['/quizlet/start','/quizlet/reveal','/quizlet/answer','/quizlet/next','/reading/words','/ai/reading/translate','/ai/reading/practice','/monthly-plans','/anki/start','/anki/answer','/practice/start','/practice/answer','/practice/next','/lingva/start','/lingva/answer','/review','/review/self','/review/choice','/verbs/review','/diary','/listening/review','/ai/speech','/ai/dialog','/ai/listening','/import/pdf','/import/cards/preview','/import/cards/confirm'].includes(req.path))
       ||(req.method==='POST'&&/^\/ai\/cards\/[^/]+\/word-example$/.test(req.path))
       ||(req.method==='POST'&&/^\/monthly-plans\/[^/]+\/reflection$/.test(req.path))
       ||(req.method==='PATCH'&&/^\/monthly-plans\/[^/]+$/.test(req.path))
@@ -117,6 +119,10 @@ export function createApp(store:Store) {
   app.post('/api/library/templates',teacherOnly,(req,res)=>res.status(201).json(library.addTemplate(req.body)));
   app.post('/api/reading/words',(req,res)=>res.json(addReadingWord(store,library,req.body)));
   app.patch('/api/reading/words/:id',(req,res)=>res.json(updateReadingTranslation(store,z.uuid().parse(req.params.id),req.body)));
+  app.post('/api/quizlet/start',(req,res)=>{const input=z.object({mode:z.enum(['cards','learn','test']),direction:z.enum(['mixed','es-ru','ru-es']).default('mixed'),topic:z.string().max(4000).optional(),lessonId:z.string().max(100).optional(),limit:z.number().int().min(1).max(50).default(10)}).strict().parse(req.body);const result=quizlet.start(res.locals.studentId,store.read(),input);store.mutate(state=>beginPractice(state,{id:result.id,format:'quizlet',quizletMode:input.mode,direction:input.direction,startedAt:new Date().toISOString(),total:result.totalWords,topic:input.topic,lessonId:input.lessonId}));res.json(result);});
+  app.post('/api/quizlet/reveal',(req,res)=>{const input=z.object({id:z.uuid(),index:z.number().int().min(0).max(1000)}).strict().parse(req.body);res.json(quizlet.reveal(res.locals.studentId,input.id,input.index));});
+  app.post('/api/quizlet/answer',(req,res)=>{const input=z.object({id:z.uuid(),index:z.number().int().min(0).max(1000),value:z.string().trim().min(1).max(4000),seconds}).strict().parse(req.body);res.json(quizlet.answer(res.locals.studentId,input,fn=>store.mutate(fn)));});
+  app.post('/api/quizlet/next',(req,res)=>{const input=z.object({id:z.uuid(),index:z.number().int().min(0).max(1000)}).strict().parse(req.body);res.json(quizlet.next(res.locals.studentId,input.id,input.index));});
   app.post('/api/anki/start',(req,res)=>{const input=z.object({mode:z.enum(['new','review','focus','all']).default('new'),topic:z.string().max(4000).optional(),lessonId:z.string().max(100).optional()}).parse(req.body);const result=anki.start(res.locals.studentId,store.read(),input);store.mutate(state=>beginPractice(state,{id:result.id,format:'anki',startedAt:new Date().toISOString(),total:result.total,topic:input.topic,lessonId:input.lessonId}));res.json(result);});
   app.post('/api/anki/answer',(req,res)=>{const input=z.object({id:z.uuid(),index:z.number().int().min(0).max(100000),rating:z.enum(['again','hard','good','easy']),seconds}).parse(req.body);const result=anki.answer(res.locals.studentId,input.id,input.index,input.rating,fn=>store.mutate(fn),(state,card,last)=>{recordPractice(state,{id:'anki:'+input.id+':'+input.index,kind:'card',at:new Date().toISOString(),correct:input.rating!=='again',seconds:input.seconds,cardId:card.id,topic:card.topic,answer:input.rating,rating:input.rating},'anki',input.id,true);if(last)finishPractice(state,input.id);});res.json(result);});
   app.post('/api/practice/start',(req,res)=>{const input=z.object({mode:z.enum(['new','review','focus','all']).default('new'),topic:z.string().max(4000).optional(),lessonId:z.string().max(100).optional(),includeVerbs:z.boolean().default(true)}).parse(req.body);const result=mixedPractice.start(res.locals.studentId,store.read(),input);store.mutate(state=>beginPractice(state,{id:result.id,format:'seventeen',startedAt:new Date().toISOString(),total:result.total,topic:input.topic,lessonId:input.lessonId}));res.json(result);});
