@@ -145,8 +145,8 @@ export function createApp(store:Store) {
   app.patch('/api/monthly-plans/:id',(req,res)=>res.json(updateMonthlyPlan(store,z.string().parse(req.params.id),req.body,(res.locals.principal as Principal).role)));
   app.post('/api/monthly-plans/:id/reflection',(req,res)=>{if((res.locals.principal as Principal).role!=='student')throw new AppError(403,'Саморефлексию заполняет ученик в своём кабинете.');res.json(reflectMonthlyPlan(store,z.string().parse(req.params.id),req.body));});
   app.put('/api/plan',(req,res)=>{const p=planSchema.parse(req.body);store.mutate(s=>{s.plan=p;});res.json({ok:true});});
-  app.post('/api/lessons',(req,res)=>{const p=lessonInput.parse(req.body);const item={...p,id:id()};store.mutate(s=>{s.lessons.push(item);});res.json(item);});
-  app.patch('/api/lessons/:id',(req,res)=>{const p=lessonInput.partial().parse(req.body);store.mutate(s=>Object.assign(find(s.lessons,req.params.id),p));res.json({ok:true});});
+  app.post('/api/lessons',teacherOnly,(req,res)=>{const p=lessonInput.parse(req.body);const item={...p,id:id()};store.mutate(s=>{s.lessons.push(item);});res.json(item);});
+  app.patch('/api/lessons/:id',teacherOnly,(req,res)=>{const p=lessonInput.partial().parse(req.body);store.mutate(s=>Object.assign(find(s.lessons,z.string().parse(req.params.id)),p));res.json({ok:true});});
   app.post('/api/miro/text',async(_req,res)=>{const url=store.read().plan.miroBoardUrl;if(!url)throw new AppError(400,'Сначала укажите доску Miro в профиле ученика.');res.json(await readMiroBoard(url,process.env.MIRO_ACCESS_TOKEN||''));});
   app.post('/api/lesson-words/batch',(req,res)=>{const input=lessonWordsInput.parse(req.body);res.json(store.mutate(state=>addLessonWords(state,input)));});
   app.post('/api/lesson-words',(req,res)=>{const input=lessonWordInput.parse(req.body);res.json(store.mutate(state=>addLessonWord(state,input)));});
@@ -155,8 +155,8 @@ export function createApp(store:Store) {
   app.patch('/api/assignments/:id',(req,res)=>{const p=z.object({done:z.boolean()}).parse(req.body);store.mutate(s=>Object.assign(find(s.assignments,req.params.id),p));res.json({ok:true});});
   app.post('/api/diary',(req,res)=>{const p=z.object({text:str,spoke:z.boolean(),avoided:z.boolean()}).parse(req.body);const item={...p,id:id(),date:new Date().toISOString()};store.mutate(s=>s.diary.push(item));res.json(item);});
   const paymentInput=z.object({date,lessons:z.number().int().min(1).max(1000).default(12),note:z.string().trim().max(1000).default('')});
-  app.post('/api/payments',(req,res)=>{const {requestId,...p}=paymentInput.extend({requestId:z.uuid().optional()}).parse(req.body);store.mutate(s=>{const previous=requestId?s.payments.find(payment=>payment.id===requestId):undefined;if(previous){if(previous.date!==p.date||(previous.lessons??12)!==p.lessons||(previous.note||'')!==p.note)throw new AppError(409,'Эта оплата уже сохранена. Обновите страницу.');return;}s.payments.push({...p,id:requestId||id()});});res.json({ok:true});});
-  app.patch('/api/payments/:id',(req,res)=>{const p=paymentInput.extend({lessons:z.number().int().min(1).max(1000)}).parse(req.body);store.mutate(s=>Object.assign(find(s.payments,req.params.id),p));res.json({ok:true});});
+  app.post('/api/payments',teacherOnly,(req,res)=>{const {requestId,...p}=paymentInput.extend({requestId:z.uuid().optional()}).parse(req.body);store.mutate(s=>{const previous=requestId?s.payments.find(payment=>payment.id===requestId):undefined;if(previous){if(previous.date!==p.date||(previous.lessons??12)!==p.lessons||(previous.note||'')!==p.note)throw new AppError(409,'Эта оплата уже сохранена. Обновите страницу.');return;}s.payments.push({...p,id:requestId||id()});});res.json({ok:true});});
+  app.patch('/api/payments/:id',teacherOnly,(req,res)=>{const p=paymentInput.extend({lessons:z.number().int().min(1).max(1000)}).parse(req.body);store.mutate(s=>Object.assign(find(s.payments,z.string().parse(req.params.id)),p));res.json({ok:true});});
   app.post('/api/audios',(req,res)=>{const p=audioInput.parse(req.body);const item={...p,id:id()};store.mutate(s=>s.audios.push(item));res.json(item);});
   app.post('/api/listening/review',(req,res)=>{
     const p=z.object({audioId:str,answer:str,seconds}).parse(req.body);const a=find(store.read().audios,p.audioId);
