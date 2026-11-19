@@ -1,6 +1,6 @@
 import { AppError } from './ai.js';
 
-export async function extractPdf(data: Buffer) {
+export async function extractPdf(data: Buffer,options:{maxPages?:number;requireText?:boolean}={}) {
   if (data.subarray(0, 4).toString() !== '%PDF') {
     throw new AppError(400, 'Выберите PDF-файл до 15 МБ.');
   }
@@ -8,7 +8,7 @@ export async function extractPdf(data: Buffer) {
   let pdf;
   try {
     pdf = await getDocument({ data: new Uint8Array(data), useSystemFonts: true }).promise;
-    if (pdf.numPages > 150) throw new AppError(400, 'В файле больше 150 страниц. Загрузите его частями.');
+    if (pdf.numPages > (options.maxPages??150)) throw new AppError(400, 'В файле больше '+(options.maxPages??150)+' страниц. Загрузите его частями.');
     const pages: string[] = [];
     for (let i = 1; i <= pdf.numPages; i++) {
       const page = await pdf.getPage(i);
@@ -28,7 +28,7 @@ export async function extractPdf(data: Buffer) {
       pages.push(lines.join('\n'));
     }
     const text = pages.join('\n\n');
-    if (!text.trim()) throw new AppError(422, 'В PDF не найден текст. Для скана сначала нужно распознавание текста. Можно вставить список слов вручную.');
+    if (!text.trim()&&options.requireText!==false) throw new AppError(422, 'В PDF не найден текст. Для скана сначала нужно распознавание текста. Можно вставить список слов вручную.');
     return { pages, text };
   } catch (error) {
     if (error instanceof AppError) throw error;

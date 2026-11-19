@@ -1,3 +1,4 @@
+import {ReadingLibrary,readingLevel,addReadingWord,updateReadingTranslation,translateReadingWords,generateReadingPractice} from './reading.js';
 import {createMonthlyPlan,updateMonthlyPlan,reflectMonthlyPlan} from './monthly-plans.js';
 import {AnkiSessions} from './anki-practice.js';
 import {beginPractice,recordPractice,finishPractice} from './practice-rewards.js';
@@ -40,6 +41,7 @@ function newCard(input:z.infer<typeof cardInput>):Card {return {...input,id:id()
 export function createApp(store:Store) {
   const mixedPractice=new MixedPracticeSessions();
   const anki=new AnkiSessions();
+  const library=new ReadingLibrary(store);
   const app=express(); app.disable('x-powered-by');
   const access=accessControl(store);
   const lingva=new LingvaSessions();
@@ -92,10 +94,12 @@ export function createApp(store:Store) {
   // Enforce permissions on the server, including requests made outside the interface.
   app.use('/api',(req,res,next)=>{
     if((res.locals.principal as Principal).role==='teacher'||['GET','HEAD','OPTIONS'].includes(req.method)){next();return;}
-    const permitted=(req.method==='POST'&&['/monthly-plans','/anki/start','/anki/answer','/practice/start','/practice/answer','/practice/next','/lingva/start','/lingva/answer','/review','/review/self','/review/choice','/verbs/review','/diary','/listening/review','/ai/speech','/ai/dialog','/ai/listening','/import/pdf','/import/cards/preview','/import/cards/confirm'].includes(req.path))
+    const permitted=(req.method==='POST'&&['/reading/words','/ai/reading/translate','/ai/reading/practice','/monthly-plans','/anki/start','/anki/answer','/practice/start','/practice/answer','/practice/next','/lingva/start','/lingva/answer','/review','/review/self','/review/choice','/verbs/review','/diary','/listening/review','/ai/speech','/ai/dialog','/ai/listening','/import/pdf','/import/cards/preview','/import/cards/confirm'].includes(req.path))
       ||(req.method==='POST'&&/^\/ai\/cards\/[^/]+\/word-example$/.test(req.path))
       ||(req.method==='POST'&&/^\/monthly-plans\/[^/]+\/reflection$/.test(req.path))
       ||(req.method==='PATCH'&&/^\/monthly-plans\/[^/]+$/.test(req.path))
+      ||(req.method==='PATCH'&&/^\/reading\/words\/[^/]+$/.test(req.path))
+      ||(req.method==='PATCH'&&/^\/library\/books\/[^/]+\/progress$/.test(req.path))
       ||(req.method==='PATCH'&&/^\/assignments\/[^/]+$/.test(req.path));
     if(req.method==='PATCH'&&/^\/cards\/[^/]+$/.test(req.path)){
       req.body=z.object({focused:z.boolean()}).strict().parse(req.body);next();return;
@@ -105,6 +109,14 @@ export function createApp(store:Store) {
   });
   app.get('/api/state',(_req,res)=>res.json({state:store.read(),meta:{ai:aiReady(),miro:Boolean(process.env.MIRO_ACCESS_TOKEN),protected:access.session(res.locals.principal).protected,verbs:knownVerbs,demo:process.env.DEMO_MODE==='true',role:(res.locals.principal as Principal).role,student:store.profile(res.locals.studentId)}}));
   app.get('/api/export',(_req,res)=>{res.setHeader('Content-Disposition','attachment; filename="mi-espanol-backup.json"');res.json({version:2,exportedAt:new Date().toISOString(),student:store.profile(res.locals.studentId),state:store.read()});});
+  app.get('/api/library/books',(req,res)=>{const level=req.query.level===undefined?undefined:readingLevel.parse(req.query.level);res.json({books:library.list(level)});});
+  app.post('/api/library/books',teacherOnly,express.raw({type:'application/pdf',limit:'30mb'}),async(req,res)=>{if(!Buffer.isBuffer(req.body))throw new AppError(400,'Выберите PDF до 30 МБ.');res.status(201).json(await library.add(req.body,req.query));});
+  app.get('/api/library/books/:id/pdf',(req,res)=>{const bookId=z.uuid().parse(req.params.id);res.setHeader('Content-Type','application/pdf');res.setHeader('Content-Disposition','inline; filename="book.pdf"');res.send(library.pdf(bookId));});
+  app.patch('/api/library/books/:id/progress',(req,res)=>{const bookId=z.uuid().parse(req.params.id),book=library.book(bookId),{page}=z.object({page:z.number().int().min(1).max(book.pages.length)}).strict().parse(req.body);store.mutate(state=>{state.readingProgress??={};state.readingProgress[bookId]={page,updatedAt:new Date().toISOString()};});res.json({ok:true});});
+  app.get('/api/library/templates',(_req,res)=>res.json({templates:library.templates()}));
+  app.post('/api/library/templates',teacherOnly,(req,res)=>res.status(201).json(library.addTemplate(req.body)));
+  app.post('/api/reading/words',(req,res)=>res.json(addReadingWord(store,library,req.body)));
+  app.patch('/api/reading/words/:id',(req,res)=>res.json(updateReadingTranslation(store,z.uuid().parse(req.params.id),req.body)));
   app.post('/api/anki/start',(req,res)=>{const input=z.object({mode:z.enum(['new','review','focus','all']).default('new'),topic:z.string().max(4000).optional(),lessonId:z.string().max(100).optional()}).parse(req.body);const result=anki.start(res.locals.studentId,store.read(),input);store.mutate(state=>beginPractice(state,{id:result.id,format:'anki',startedAt:new Date().toISOString(),total:result.total,topic:input.topic,lessonId:input.lessonId}));res.json(result);});
   app.post('/api/anki/answer',(req,res)=>{const input=z.object({id:z.uuid(),index:z.number().int().min(0).max(100000),rating:z.enum(['again','hard','good','easy']),seconds}).parse(req.body);const result=anki.answer(res.locals.studentId,input.id,input.index,input.rating,fn=>store.mutate(fn),(state,card,last)=>{recordPractice(state,{id:'anki:'+input.id+':'+input.index,kind:'card',at:new Date().toISOString(),correct:input.rating!=='again',seconds:input.seconds,cardId:card.id,topic:card.topic,answer:input.rating,rating:input.rating},'anki',input.id,true);if(last)finishPractice(state,input.id);});res.json(result);});
   app.post('/api/practice/start',(req,res)=>{const input=z.object({mode:z.enum(['new','review','focus','all']).default('new'),topic:z.string().max(4000).optional(),lessonId:z.string().max(100).optional(),includeVerbs:z.boolean().default(true)}).parse(req.body);const result=mixedPractice.start(res.locals.studentId,store.read(),input);store.mutate(state=>beginPractice(state,{id:result.id,format:'seventeen',startedAt:new Date().toISOString(),total:result.total,topic:input.topic,lessonId:input.lessonId}));res.json(result);});
@@ -185,6 +197,8 @@ export function createApp(store:Store) {
     res.json({ok:true});
   });
   app.post('/api/ai/translate-word',async(req,res)=>{const {es}=z.object({es:z.string().trim().min(1).max(4000).refine(value=>!/[\r\n]/.test(value),'Введите одно слово или выражение.')} ).parse(req.body);if(!aiReady()&&!store.read().cards.some(card=>normalize(card.es)===normalize(es)))throw new AppError(503,'Автоперевод пока не подключён. Добавьте ANTHROPIC_API_KEY в Render или введите слово — перевод вручную.');res.json(await translateWord(store.read(),es));});
+  app.post('/api/ai/reading/translate',async(req,res)=>{const {ids}=z.object({ids:z.array(z.uuid()).min(1).max(5)}).strict().parse(req.body);res.json({words:await translateReadingWords(store,ids)});});
+  app.post('/api/ai/reading/practice',async(req,res)=>res.json(await generateReadingPractice(store,library,req.body)));
   app.post('/api/ai/quick-card',async(req,res)=>{const p=z.object({es:str}).parse(req.body);const raw=await claude(studentPrompt()+' Верни только JSON {es,ru,topic,type,register,source,examples:[{es,ru}]}. type: word/chunk/construction, register: neutral/colloquial/vulgar. source: «Быстрое добавление · Claude».',p.es);res.json(cardInput.parse(aiJSON(raw)));});
   app.post('/api/ai/verbs',async(req,res)=>{const p=z.object({verb:z.string().trim().min(2).max(70),tense}).parse(req.body);const raw=await claude(studentPrompt()+' Верни только JSON-массив из 6 точных форм: yo, tú, él, nosotros, vosotros, ellos. Для reflexivos добавь местоимение. Без личных местоимений подлежащего. Проверь ударения.',`${p.verb}, ${tenseNames[p.tense]}`);const forms=z.array(str).length(6).parse(aiJSON(raw));store.mutate(s=>{s.verbTables[p.verb]??={};s.verbTables[p.verb][p.tense]=forms;});res.json({forms});});
   app.post('/api/ai/summary',async(_req,res)=>{const state=store.read();const text=aiReady()?await claude(studentPrompt()+' Напиши краткую сводку к уроку: сделано, проблемы, реальная речь, что взять на урок. Опираться только на данные.',JSON.stringify({summary:localSummary(state),recentAttempts:state.attempts.slice(-100),speech:state.speeches.slice(-5),diary:state.diary.slice(-10),dialogues:state.dialogs.slice(-3)})):localSummary(state);const summary={text,date:new Date().toISOString()};store.mutate(s=>{s.summary=summary;});res.json(summary);});
@@ -228,11 +242,11 @@ export function createApp(store:Store) {
   app.post('/api/ai/document',async(req,res)=>{const p=z.object({text:z.string().trim().min(30).max(35000),source:str}).parse(req.body);const raw=await claude(studentPrompt()+' Разбери фрагмент урока. Выбери полезные повседневные слова и фразы по уровню ученика, сгруппируй по темам. Не утверждай статистическую частотность без данных. Глаголы из материала добавляй также отдельными карточками-инфинитивами с русским переводом для тренажёра глаголов. Верни только JSON {title,transcript,cards:[{es,ru,type,topic,register,source,examples:[{es,ru,tense}]}],topics:[строки],assignments:[строки]}. Сохраняй транскрипцию целиком, источник и регистр. Добавь примеры к словам без примеров. Ключи к упражнениям не добавляй в открытые формулировки заданий. Строка таблицы — карточка; конструкции с пропуском — construction, фразы — chunk. Не придумывай содержание исходного документа.',JSON.stringify(p));res.json(documentSchema.parse(aiJSON(raw)));});
   app.post('/api/import/confirm',(req,res)=>{const p=documentSchema.parse(req.body);let added=0;store.mutate(s=>{const keys=new Set(s.cards.map(c=>normalize(c.es)));for(const c of p.cards){if(!keys.has(normalize(c.es))){s.cards.push(newCard(c));keys.add(normalize(c.es));added++;}}s.plan.topics=[...new Set([...s.plan.topics,...p.topics])];s.lessons.push({id:id(),date:new Date().toISOString().slice(0,10),title:p.title,status:'planned',note:'Импорт материалов · подтверждено преподавателем',cardIds:s.cards.filter(card=>p.cards.some(input=>normalize(input.es)===normalize(card.es))).map(card=>card.id),text:p.transcript});for(const title of p.assignments)s.assignments.push({id:id(),title,due:new Date(Date.now()+7*86400000).toISOString().slice(0,10),done:false});});res.json({added,duplicates:p.cards.length-added});});
   app.use('/api',(_req,res)=>res.status(404).json({error:'Такого действия нет.'}));
-  app.use((err:unknown,_req:express.Request,res:express.Response,_next:express.NextFunction)=>{
+  app.use((err:unknown,req:express.Request,res:express.Response,_next:express.NextFunction)=>{
     if(err instanceof z.ZodError){res.status(400).json({error:'Проверьте поля формы: '+err.issues.map(x=>x.path.join('.')+': '+x.message).join('; ')});return;}
     if(err instanceof AppError){res.status(err.status).json({error:err.message});return;}
     const status=(err as {status?:number})?.status;
-    if(status===413){res.status(413).json({error:'Файл слишком большой (максимум 15 МБ).'});return;}
+    if(status===413){res.status(413).json({error:req.path.startsWith('/api/library/books')?'PDF слишком большой (максимум 30 МБ).':'Файл слишком большой (максимум 15 МБ).'});return;}
     console.error('Request failed:',err instanceof Error?err.name:'Unknown error');res.status(500).json({error:'Не удалось выполнить действие. Данные сохранены; попробуйте ещё раз.'});
   });
   return app;

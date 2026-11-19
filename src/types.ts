@@ -48,7 +48,7 @@ export interface Dialog { id: string; date: string; topic: string; focus: string
 export interface AudioItem { id: string; title: string; url: string; transcript: string; question: string; answer: string; topic: string }
 export interface Plan { miroBoardUrl?:string; level: string; goal: string; goals: { skill: string; now: string; target: string }[]; criteria: string[]; topics: string[] }
 export interface AppState {
-  monthlyPlans?:MonthlyPlan[];practiceSessions?:PracticeSession[];cards: Card[]; attempts: Attempt[]; lessons: Lesson[]; assignments: Assignment[]; diary: Diary[];
+  readingWords?:ReadingWord[];readingProgress?:Record<string,{page:number;updatedAt:string}>;readingPractice?:ReadingExerciseSet[];monthlyPlans?:MonthlyPlan[];practiceSessions?:PracticeSession[];cards: Card[]; attempts: Attempt[]; lessons: Lesson[]; assignments: Assignment[]; diary: Diary[];
   speeches: SpeechRecord[]; dialogs: Dialog[]; audios: AudioItem[]; payments: Payment[];
   plan: Plan; verbTables: Record<string, Partial<Record<Tense, string[]>>>;
   summary: { text: string; date: string } | null;
@@ -69,3 +69,10 @@ export interface MonthlyPlan {
  id:string;revision:number;month:string;goal:string;aspects:LanguageAspect[];topicsSkills:string;successCriteria:string;baselineDate:string;reviewOn:string;baselines:MonthlyBaseline[];createdAt:string;updatedAt:string;
  reflection?:{text:string;results:{aspect:LanguageAspect;result:string}[];submittedAt:string;updatedAt:string};
 }
+
+export type ReadingLevel='A1-A2'|'B1-B2'|'C1-C2';
+export interface ReadingBook {id:string;title:string;level:ReadingLevel;pages:number;hasText:boolean;createdAt:string}
+export interface ReadingRect {x:number;y:number;width:number;height:number}
+export interface ReadingWord {id:string;es:string;ru:string|null;addedAt:string;status:'pending'|'ready'|'error';cardId?:string;occurrences:{bookId:string;bookTitle:string;level?:ReadingLevel;page:number;rects:ReadingRect[]}[]}
+export interface ReadingTemplate {id:string;title:string;instructions:string;createdAt:string}
+export interface ReadingExerciseSet {id:string;templateId:string;title:string;level:string;createdAt:string;wordIds:string[];items:{prompt:string;answer:string}[]}

@@ -5,7 +5,7 @@ test('the navy and gold cabinet keeps genuine metrics and working teacher action
   await expect(page.getByRole('heading',{name:'Кабинет преподавателя',exact:true})).toBeVisible();
   await expect(page.locator('.masthead-brand')).toContainText('MI ESPAÑOL');
   const navigation=page.getByRole('navigation',{name:'Основная навигация'});
-  await expect(navigation.locator('a[href^="#"]')).toHaveCount(9);
+  await expect(navigation.locator('a[href^="#"]')).toHaveCount(11);
   const first=await navigation.getByRole('link',{name:'План',exact:true}).boundingBox(),last=await navigation.getByRole('link',{name:'Оплата',exact:true}).boundingBox();
   expect(Math.abs(first!.y-last!.y)).toBeLessThan(2);
   const {state}=await (await page.request.get('/api/state')).json();
