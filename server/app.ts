@@ -1,5 +1,7 @@
 import {ReadingLibrary,readingLevel,addReadingWord,updateReadingTranslation,translateReadingWords,generateReadingPractice} from './reading.js';
 import {createMonthlyPlan,updateMonthlyPlan,reflectMonthlyPlan} from './monthly-plans.js';
+import {madridDay} from '../src/study-stats.js';
+import {saveAttendanceSchedule,saveAttendanceSlot} from './attendance.js';
 import {QuizletSessions} from './quizlet.js';
 import {AnkiSessions} from './anki-practice.js';
 import {beginPractice,recordPractice,finishPractice} from './practice-rewards.js';
@@ -76,7 +78,9 @@ export function createApp(store:Store) {
   app.post('/api/logout',(_req,res)=>{res.setHeader('Set-Cookie','mi_session=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0');res.json({ok:true});});
   const teacherOnly:express.RequestHandler=(_req,res,next)=>{if((res.locals.principal as Principal).role!=='teacher'){res.status(403).json({error:'Это действие доступно только преподавателю.'});return;}next();};
   app.use('/api/students',teacherOnly);
-  app.get('/api/students',(_req,res)=>res.json({students:store.listStudents()}));
+  app.get('/api/students',(req,res)=>{const archived=z.enum(['true','false']).optional().parse(req.query.archived);res.json({students:store.listStudents(archived==='true')});});
+  app.delete('/api/students/:studentId',(req,res)=>{if(!store.archiveStudent(req.params.studentId))throw new AppError(404,'Ученик не найден.');res.json({ok:true});});
+  app.post('/api/students/:studentId/restore',(req,res)=>{if(!store.student(req.params.studentId,true)?.archived_at)throw new AppError(404,'Кабинет не найден в архиве.');res.json(store.restoreStudent(req.params.studentId));});
   app.post('/api/students',(req,res)=>{
     const input=z.object({name:z.string().trim().min(1).max(120),level:z.string().trim().min(1).max(80).default('A1'),examples:z.boolean().default(false)}).parse(req.body);
     res.status(201).json(store.createStudent(input.name,input.level,input.examples));
@@ -109,6 +113,8 @@ export function createApp(store:Store) {
     if(!permitted){res.status(403).json({error:'Это действие доступно только преподавателю.'});return;}
     next();
   });
+  app.put('/api/attendance/schedule',teacherOnly,(req,res)=>res.json(store.mutate(state=>saveAttendanceSchedule(state,store.student(res.locals.studentId)!.name,req.body,new Date(),madridDay(store.student(res.locals.studentId)!.created_at)))));
+  app.post('/api/attendance/slots/:date',teacherOnly,(req,res)=>res.json(store.mutate(state=>saveAttendanceSlot(state,store.student(res.locals.studentId)!.name,z.string().parse(req.params.date),req.body,new Date(),madridDay(store.student(res.locals.studentId)!.created_at)))));
   app.get('/api/state',(_req,res)=>res.json({state:store.read(),meta:{ai:aiReady(),miro:Boolean(process.env.MIRO_ACCESS_TOKEN),protected:access.session(res.locals.principal).protected,verbs:knownVerbs,demo:process.env.DEMO_MODE==='true',role:(res.locals.principal as Principal).role,student:store.profile(res.locals.studentId)}}));
   app.get('/api/export',(_req,res)=>{res.setHeader('Content-Disposition','attachment; filename="mi-espanol-backup.json"');res.json({version:2,exportedAt:new Date().toISOString(),student:store.profile(res.locals.studentId),state:store.read()});});
   app.get('/api/library/books',(req,res)=>{const level=req.query.level===undefined?undefined:readingLevel.parse(req.query.level);res.json({books:library.list(level)});});
@@ -164,7 +170,7 @@ export function createApp(store:Store) {
   app.post('/api/monthly-plans/:id/reflection',(req,res)=>{if((res.locals.principal as Principal).role!=='student')throw new AppError(403,'Саморефлексию заполняет ученик в своём кабинете.');res.json(reflectMonthlyPlan(store,z.string().parse(req.params.id),req.body));});
   app.put('/api/plan',(req,res)=>{const p=planSchema.parse(req.body);store.mutate(s=>{s.plan=p;});res.json({ok:true});});
   app.post('/api/lessons',teacherOnly,(req,res)=>{const p=lessonInput.parse(req.body);const item={...p,id:id()};store.mutate(s=>{s.lessons.push(item);});res.json(item);});
-  app.patch('/api/lessons/:id',teacherOnly,(req,res)=>{const p=lessonInput.partial().parse(req.body);store.mutate(s=>Object.assign(find(s.lessons,z.string().parse(req.params.id)),p));res.json({ok:true});});
+  app.patch('/api/lessons/:id',teacherOnly,(req,res)=>{const p=lessonInput.partial().parse(req.body);store.mutate(s=>{const lesson=find(s.lessons,z.string().parse(req.params.id));if(p.status)delete lesson.attendanceExcused;Object.assign(lesson,p);});res.json({ok:true});});
   app.post('/api/miro/text',async(_req,res)=>{const url=store.read().plan.miroBoardUrl;if(!url)throw new AppError(400,'Сначала укажите доску Miro в профиле ученика.');res.json(await readMiroBoard(url,process.env.MIRO_ACCESS_TOKEN||''));});
   app.post('/api/lesson-words/batch',(req,res)=>{const input=lessonWordsInput.parse(req.body);res.json(store.mutate(state=>addLessonWords(state,input)));});
   app.post('/api/lesson-words',(req,res)=>{const input=lessonWordInput.parse(req.body);res.json(store.mutate(state=>addLessonWord(state,input)));});

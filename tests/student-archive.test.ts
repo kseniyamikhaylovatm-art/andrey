@@ -1,0 +1,23 @@
+import {test} from 'node:test';
+import assert from 'node:assert/strict';
+import {mkdtempSync,rmSync} from 'node:fs';
+import {join} from 'node:path';
+import {tmpdir} from 'node:os';
+import {Store} from '../server/store.js';
+import {createApp} from '../server/app.js';
+test('archiving preserves full workspaces, revokes codes and survives restart without recreating the legacy duplicate',()=>{
+ const dir=mkdtempSync(join(tmpdir(),'student-archive-'));let store=new Store(dir);const a=store.createStudent('Андрей и Таня','A1',true),b=store.createStudent('Андрей и Таня','A1');const before=store.withStudent(a.student.id,()=>store.read());
+ try{assert.equal(store.archiveStudent(a.student.id),true);assert.equal(store.student(a.student.id),undefined);assert.equal(store.findCode(a.code),undefined);assert.equal(store.listStudents().some(s=>s.id===a.student.id),false);assert.equal(store.listStudents(true)[0].id,a.student.id);assert.ok(store.student(b.student.id));assert.deepEqual(store.withStudent(a.student.id,()=>store.read()),before);assert.equal(store.archiveStudent('legacy'),true);store.close();store=new Store(dir);assert.equal(store.student('legacy'),undefined);assert.equal(store.listStudents(true).length,2);
+ const restored=store.restoreStudent(a.student.id);assert.notEqual(restored.code,a.code);assert.equal(store.findCode(a.code),undefined);assert.equal(store.findCode(restored.code)?.id,a.student.id);assert.deepEqual(store.withStudent(a.student.id,()=>store.read()),before);
+ }finally{store.close();rmSync(dir,{recursive:true});}
+});
+test('only the teacher edits attendance or archives; old sessions are revoked and restore keeps the learner data',async()=>{
+ const previous={teacher:process.env.TEACHER_ACCESS_CODE,secret:process.env.SESSION_SECRET};process.env.TEACHER_ACCESS_CODE='archive-test-teacher-code';process.env.SESSION_SECRET='archive-test-session-secret-with-32-characters';const dir=mkdtempSync(join(tmpdir(),'attendance-permissions-')),store=new Store(dir),student=store.createStudent('Пётр','A1',true),server=createApp(store).listen(0,'127.0.0.1');await new Promise<void>(resolve=>server.once('listening',resolve));const base='http://127.0.0.1:'+(server.address() as {port:number}).port+'/api';
+ const request=async(path:string,cookie='',body?:unknown,method?:string)=>{const response=await fetch(base+path,{method:method||(body===undefined?'GET':'POST'),headers:{cookie,...body!==undefined?{'content-type':'application/json'}:{}},body:body===undefined?undefined:JSON.stringify(body)});return {status:response.status,body:await response.json(),cookie:response.headers.get('set-cookie')?.split(';')[0]||''};};
+ try{const teacher=(await request('/login','',{code:process.env.TEACHER_ACCESS_CODE})).cookie,pupil=(await request('/login','',{code:student.code})).cookie,selected='?studentId='+student.student.id;
+ assert.equal((await request('/attendance/schedule',pupil,{from:'2026-11-01',days:[1,4]},'PUT')).status,403);assert.equal((await request('/attendance/slots/2026-11-02',pupil,{actualDate:'2026-11-02',status:'held'})).status,403);assert.equal((await request('/students/'+student.student.id,pupil,undefined,'DELETE')).status,403);
+ assert.equal((await request('/attendance/schedule'+selected,teacher,{from:'2026-11-01',days:[1,4]},'PUT')).status,200);const moved=await request('/attendance/slots/2026-11-02'+selected,teacher,{actualDate:'2026-11-03',status:'planned'});assert.equal(moved.status,200);assert.equal(moved.body.attendanceDate,'2026-11-02');assert.equal((await request('/state',pupil)).body.state.attendanceSchedules[0].days[0],1);
+ const before=store.withStudent(student.student.id,()=>store.read());assert.equal((await request('/students/'+student.student.id,teacher,undefined,'DELETE')).status,200);assert.equal((await request('/state',pupil)).status,401);assert.equal((await request('/login','',{code:student.code})).status,401);assert.equal((await request('/students?archived=true',teacher)).body.students[0].id,student.student.id);
+ const restored=await request('/students/'+student.student.id+'/restore',teacher,{});assert.equal(restored.status,200);assert.equal((await request('/state',pupil)).status,401);const fresh=(await request('/login','',{code:restored.body.code})).cookie;assert.equal((await request('/state',fresh)).status,200);assert.deepEqual(store.withStudent(student.student.id,()=>store.read()),before);
+ }finally{await new Promise<void>(resolve=>server.close(()=>resolve()));store.close();rmSync(dir,{recursive:true});for(const [key,value] of [['TEACHER_ACCESS_CODE',previous.teacher],['SESSION_SECRET',previous.secret]])if(value===undefined)delete process.env[key!];else process.env[key!]=value;}
+});

@@ -39,7 +39,8 @@ export interface Attempt {
   format?:PracticeFormat;sessionId?:string;xp?:number;stageAfter?:number;difficult?:boolean;completed?:boolean;rating?:'again'|'hard'|'good'|'easy';
   seconds: number; cardId?: string; topic?: string; verb?: string; tense?: string; answer?: string;
 }
-export interface Lesson { id: string; date: string; title: string; status: 'planned' | 'held' | 'cancelled'; note: string; text?: string; video?: string; cardIds?: string[] }
+export interface Lesson { attendanceDate?:string;attendanceExcused?:boolean;id: string; date: string; title: string; status: 'planned' | 'held' | 'cancelled'; note: string; text?: string; video?: string; cardIds?: string[] }
+export interface AttendanceSchedule {from:string;days:number[]}
 export interface LessonWordResult {lessonId:string;cardId:string;created:boolean;translationKept:boolean;enabled:boolean}
 export interface Assignment { id: string; title: string; due: string; done: boolean }
 export interface Diary { id: string; date: string; text: string; spoke: boolean; avoided: boolean }
@@ -48,12 +49,12 @@ export interface Dialog { id: string; date: string; topic: string; focus: string
 export interface AudioItem { id: string; title: string; url: string; transcript: string; question: string; answer: string; topic: string }
 export interface Plan { miroBoardUrl?:string; level: string; goal: string; goals: { skill: string; now: string; target: string }[]; criteria: string[]; topics: string[] }
 export interface AppState {
-  readingWords?:ReadingWord[];readingProgress?:Record<string,{page:number;updatedAt:string}>;readingPractice?:ReadingExerciseSet[];monthlyPlans?:MonthlyPlan[];practiceSessions?:PracticeSession[];cards: Card[]; attempts: Attempt[]; lessons: Lesson[]; assignments: Assignment[]; diary: Diary[];
+  attendanceSchedules?:AttendanceSchedule[];readingWords?:ReadingWord[];readingProgress?:Record<string,{page:number;updatedAt:string}>;readingPractice?:ReadingExerciseSet[];monthlyPlans?:MonthlyPlan[];practiceSessions?:PracticeSession[];cards: Card[]; attempts: Attempt[]; lessons: Lesson[]; assignments: Assignment[]; diary: Diary[];
   speeches: SpeechRecord[]; dialogs: Dialog[]; audios: AudioItem[]; payments: Payment[];
   plan: Plan; verbTables: Record<string, Partial<Record<Tense, string[]>>>;
   summary: { text: string; date: string } | null;
 }
-export interface StudentProfile {id:string;name:string;createdAt:string;level:string;cards:number;attempts:number;lastPractice:string|null;miroBoardUrl?:string;payment?:PaymentSummary}
+export interface StudentProfile {archivedAt?:string;id:string;name:string;createdAt:string;level:string;cards:number;attempts:number;lastPractice:string|null;miroBoardUrl?:string;payment?:PaymentSummary}
 export interface AccessSession {authenticated:boolean;protected:boolean;teacherConfigured:boolean;demo?:boolean;role?:'teacher'|'student';studentId?:string}
 export interface WorkspaceMeta {ai:boolean;protected:boolean;verbs:string[];demo?:boolean;miro?:boolean;role:'teacher'|'student';student:StudentProfile}
 
