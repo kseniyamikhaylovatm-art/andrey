@@ -10,12 +10,13 @@ async function record(page:Page,text:string){const field=page.getByRole('textbox
 
 test('teacher keeps dated lesson lists and trains all words of the selected lesson using the same editable cards',async({page})=>{
   await page.setViewportSize({width:1586,height:1100});const result=await openNewStudent(page,'Слова · учебный кабинет');
+  const headers={'X-Student-Id':result.student.id};await page.request.post('/api/payments',{headers,data:{date:'2026-11-01',lessons:4}});await page.request.post('/api/lessons',{headers,data:{date:'2026-11-17',title:'Запланированное занятие',status:'planned',note:'Проверить сохранение'}});await page.reload();
   await page.getByLabel('Дата урока',{exact:true}).fill('2026-11-17');
   const pairs=['el barrio — район','la esquina — угол','cruzar — переходить','el semáforo — светофор','girar — поворачивать','seguir recto — идти прямо','el taller — мастерская','la plaza — площадь','el puente — мост','la acera — тротуар','la entrada — вход','la salida — выход'];
   for(const text of pairs)await record(page,text);
   const requestOptions={headers:{'X-Student-Id':result.student.id}};
   const initial=(await (await page.request.get('/api/state',requestOptions)).json()).state;
-  const first=initial.lessons.find((lesson:{date:string})=>lesson.date==='2026-11-17');expect(first.cardIds).toHaveLength(12);
+  const first=initial.lessons.find((lesson:{date:string})=>lesson.date==='2026-11-17');expect(first.cardIds).toHaveLength(12);expect(first.status).toBe('held');expect(initial.lessons).toHaveLength(1);
   await page.getByLabel('Дата урока',{exact:true}).fill('2026-11-16');await record(page,'el campo — поле');await record(page,'el barrio — район');
   const state=(await (await page.request.get('/api/state',requestOptions)).json()).state;
   expect(state.cards).toHaveLength(13);expect(state.lessons).toHaveLength(2);
@@ -34,6 +35,7 @@ test('teacher keeps dated lesson lists and trains all words of the selected less
   await page.getByRole('button',{name:'Закончить сейчас',exact:true}).click();
   await page.getByRole('button',{name:'Все слова',exact:true}).click();await page.getByRole('button',{name:'База слов',exact:true}).click();
   await expect(page.locator('.vocab-row').filter({hasText:'el barrio'})).toContainText('городской район');
+  await page.getByRole('link',{name:'Оплата',exact:true}).click();await expect(page.getByRole('combobox',{name:'Статус занятия Запланированное занятие',exact:true})).toHaveValue('held');await expect(page.locator('.stat').filter({hasText:'Оплаченных осталось'}).locator('.stat-value')).toHaveText('2');
 });
 
 test('a student sees live lesson vocabulary on a phone and can practice even the first word in an empty cabinet',async({page,browser})=>{

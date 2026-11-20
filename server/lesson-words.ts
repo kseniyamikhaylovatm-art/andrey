@@ -28,6 +28,7 @@ export function addLessonWord(state:AppState,input:z.infer<typeof lessonWordInpu
     if(!state.plan.topics.includes(card.topic))state.plan.topics.push(card.topic);
   }
   lesson.cardIds=[...new Set([...(lesson.cardIds||[]),card.id])];
+  lesson.status='held';
   return {lessonId:lesson.id,cardId:card.id,created,translationKept:!created&&wordKey(card.ru)!==wordKey(pair.ru),enabled:card.enabled};
 }
 

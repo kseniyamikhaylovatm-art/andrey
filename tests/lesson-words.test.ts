@@ -5,8 +5,26 @@ import {join} from 'node:path';
 import {tmpdir} from 'node:os';
 import {Store} from '../server/store.js';
 import {createApp} from '../server/app.js';
-import {addLessonWord,lessonWordInput} from '../server/lesson-words.js';
+import {addLessonWord,addLessonWords,lessonWordsInput,lessonWordInput} from '../server/lesson-words.js';
+import {paymentBalance} from '../src/payment-balance.js';
 import {lessonCards} from '../src/lesson-vocabulary.js';
+
+test('saving vocabulary marks the existing lesson held, charges it once and rolls back failures',()=>{
+ const dir=mkdtempSync(join(tmpdir(),'es-vocabulary-attendance-')),store=new Store(dir);
+ const input={date:'2026-11-20',lessonId:'scheduled',text:'la ventana — окно',topic:'Дом',title:''};
+ try{
+  store.mutate(state=>{state.payments=[{id:'paid',date:'2026-11-01',lessons:4}];state.lessons.push({id:'scheduled',date:input.date,title:'Наш урок',status:'planned',note:'Сохранить заметку'});});
+  const before=store.read();assert.throws(()=>store.mutate(state=>addLessonWords(state,lessonWordsInput.parse({...input,text:'la mesa — стол\nстрока без перевода'}))));assert.deepEqual(store.read(),before);assert.equal(paymentBalance(store.read()).remaining,4);
+  const result=store.mutate(state=>addLessonWord(state,lessonWordInput.parse(input)));assert.equal(result.lessonId,'scheduled');assert.equal(paymentBalance(store.read()).remaining,3);
+  const lesson=store.read().lessons[0];assert.equal(lesson.status,'held');assert.equal(lesson.title,'Наш урок');assert.equal(lesson.note,'Сохранить заметку');
+  for(let retry=0;retry<2;retry++)store.mutate(state=>addLessonWords(state,lessonWordsInput.parse({...input,lessonId:undefined,text:'la ventana — окно\nla puerta — дверь'})));
+  assert.equal(store.read().lessons.length,1);assert.equal(paymentBalance(store.read()).used,1);assert.equal(paymentBalance(store.read()).remaining,3);
+  store.mutate(state=>{state.lessons[0].status='cancelled';});assert.equal(paymentBalance(store.read()).remaining,4);
+  store.mutate(state=>addLessonWord(state,lessonWordInput.parse(input)));assert.equal(paymentBalance(store.read()).remaining,3);assert.equal(store.read().lessons.length,1);
+  store.mutate(state=>addLessonWords(state,lessonWordsInput.parse({...input,date:'2026-11-21',lessonId:undefined,text:'la ventana — окно\nla puerta — дверь'})));
+  assert.equal(store.read().lessons.length,2);assert.equal(paymentBalance(store.read()).remaining,2);
+ }finally{store.close();rmSync(dir,{recursive:true});}
+});
 
 test('dated lesson vocabulary reuses the same automation cards, preserves progress and persists atomically',()=>{
   const dir=mkdtempSync(join(tmpdir(),'es-words-'));let store=new Store(dir);
@@ -15,7 +33,7 @@ test('dated lesson vocabulary reuses the same automation cards, preserves progre
     const first=add('el semáforo — светофор'),another=add('cruzar — переходить');
     assert.equal(first.lessonId,another.lessonId);assert.equal(first.created,true);
     const lesson=store.read().lessons.find(item=>item.id===first.lessonId)!;
-    assert.equal(lesson.date,'2026-11-17');assert.equal(lesson.title,'В городе');assert.equal(lesson.status,'planned');
+    assert.equal(lesson.date,'2026-11-17');assert.equal(lesson.title,'В городе');assert.equal(lesson.status,'held');
     assert.deepEqual(lesson.cardIds,[first.cardId,another.cardId]);
     store.mutate(state=>{const card=state.cards.find(item=>item.id===first.cardId)!;Object.assign(card,{seen:7,correct:6,stage:4,due:'2026-11-30T12:00:00Z',focused:true});});
     const before=structuredClone(store.read().cards.find(item=>item.id===first.cardId));
@@ -30,7 +48,7 @@ test('dated lesson vocabulary reuses the same automation cards, preserves progre
     store.close();store=new Store(dir);const state=store.read();
     assert.deepEqual(lessonCards(state.cards,state.lessons.find(item=>item.id===first.lessonId)).map(card=>card.id),[first.cardId,another.cardId]);
     assert.equal(lessonCards(state.cards,state.lessons.find(item=>item.id===reused.lessonId))[0].stage,4);
-    assert.equal(state.lessons.filter(item=>item.status==='held').length,0,'Recording words must not charge a lesson');
+    assert.equal(state.lessons.filter(item=>item.status==='held').length,2,'Vocabulary counts each dated lesson once, including reused words');
   }finally{store.close();rmSync(dir,{recursive:true});}
 });
 
@@ -51,7 +69,7 @@ test('teacher records words in one student space; the student reads and reviews 
     assert.equal((await request('/lesson-words','',input)).status,401);
     const result=await request('/lesson-words',owner,input,'POST',a.student.id);assert.equal(result.status,200);
     const {cardId,lessonId}=result.body;
-    const own=(await request('/state',learner)).body.state;assert.equal(own.cards[0].id,cardId);assert.deepEqual(own.lessons[0].cardIds,[cardId]);
+    const own=(await request('/state',learner)).body.state;assert.equal(own.cards[0].id,cardId);assert.deepEqual(own.lessons[0].cardIds,[cardId]);assert.equal(own.lessons[0].status,'held');
     assert.equal((await request('/lesson-words',learner,input)).status,403);
     assert.equal((await request('/lessons/'+lessonId+'/words/'+cardId,learner,undefined,'DELETE')).status,403);
     assert.equal((await request('/state',learner,undefined,'GET',b.student.id)).status,403);

@@ -35,7 +35,7 @@ try{
  const lesson=await fetch(base+'/api/lessons',{method:'POST',headers:{'content-type':'application/json',cookie},body:JSON.stringify({date:'2026-11-03',title:'Production restart check',note:'',status:'planned'})});assert.equal(lesson.status,200);
  await stop();await start();
  const response=await fetch(base+'/api/state',{headers:{cookie}});assert.equal(response.status,200);const result=await response.json();assert.equal(result.state.lessons[0].title,'Production restart check');assert.equal(result.meta.demo,true);
- const own=await (await fetch(base+'/api/state',{headers:{cookie:studentCookie}})).json();assert.equal(own.meta.student.id,student.student.id);assert.equal(own.state.lessons.length,1);assert.deepEqual(own.state.lessons[0].cardIds,[vocabulary.cardId]);assert.equal(own.state.cards[0].ru,'дверь');
+ const own=await (await fetch(base+'/api/state',{headers:{cookie:studentCookie}})).json();assert.equal(own.meta.student.id,student.student.id);assert.equal(own.state.lessons.length,1);assert.deepEqual(own.state.lessons[0].cardIds,[vocabulary.cardId]);assert.equal(own.state.lessons[0].status,'held');assert.equal(own.state.cards[0].ru,'дверь');
  const afterRestart=await fetch(base+'/api/login',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({code:student.code})});assert.equal(afterRestart.status,200);
  console.log('Production OK: built interface, protected roles, secure sessions, student codes and dated vocabulary linked to automation persist after restart.');
 }finally{await stop();rmSync(dir,{recursive:true});}
