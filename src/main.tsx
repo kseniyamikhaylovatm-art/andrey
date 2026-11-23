@@ -25,7 +25,7 @@ function App(){
   const init=useCallback(async()=>{try{const value=await api<AccessSession>('/session');setSession(value);if(value.role==='teacher'){setSelected(sessionStorage.getItem('mi:selected-student')||(!value.protected?'legacy':null));}setError('');}catch(e){setError((e as Error).message);}},[]);
   useEffect(()=>{void init();},[init]);
   useEffect(()=>{if(!toast)return;const timer=setTimeout(()=>setToast(''),6000);return()=>clearTimeout(timer);},[toast]);
-  const choose=(id:string|null)=>{setSelected(id);if(id)sessionStorage.setItem('mi:selected-student',id);else sessionStorage.removeItem('mi:selected-student');location.hash='plan';};
+  const choose=(id:string|null)=>{setSelected(id);if(id)sessionStorage.setItem('mi:selected-student',id);else sessionStorage.removeItem('mi:selected-student');if(id)location.hash='cabinet';};
   const expired=useCallback(()=>{setSession(null);setSelected(null);void init();},[init]);
   async function logout(){try{await api('/logout',{});sessionStorage.removeItem('mi:selected-student');for(const key of Object.keys(sessionStorage))if(key.startsWith('mi:draft:'))sessionStorage.removeItem(key);setSession(null);setSelected(null);setCode('');await init();}catch(e){notify((e as Error).message);}}
   let page;
@@ -46,7 +46,8 @@ function WorkspaceHeader({teacher,name,children,logout}:{teacher:boolean;name?:s
 function StudentWorkspace({studentId,session,notify,expired,logout,roster}:{studentId:string;session:AccessSession;notify:(message:string)=>void;expired:()=>void;logout:()=>void;roster:()=>void}){
   const client=useMemo(()=>workspaceApi(studentId),[studentId]);
   const [data,setData]=useState<{state:AppState;meta:WorkspaceMeta}|null>(null),[error,setError]=useState(''),[route,setRoute]=useState(readRoute),[mobile,setMobile]=useState(false);
-  const teacher=session.role==='teacher',tab=route.tab;
+  const teacher=session.role==='teacher';
+  const tab=teacher&&!location.hash?'cabinet':route.tab;
   const refresh=useCallback(async()=>{try{const result=await client<NonNullable<typeof data>>('/state');setData(result);setError('');}catch(e){if(e instanceof ApiError&&e.status===401)expired();else setError((e as Error).message);throw e;}},[client,expired]);
   useEffect(()=>{void refresh().catch(()=>{});const hash=()=>{setRoute(readRoute());setMobile(false);};window.addEventListener('hashchange',hash);return()=>window.removeEventListener('hashchange',hash);},[refresh]);
   useEffect(()=>{const focus=()=>{void refresh().catch(()=>notify('Не удалось обновить данные.'));};window.addEventListener('focus',focus);return()=>window.removeEventListener('focus',focus);},[refresh,notify]);
