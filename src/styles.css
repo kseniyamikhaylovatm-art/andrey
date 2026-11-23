@@ -85,3 +85,17 @@
   flex-wrap: wrap;
   gap: .65rem;
 }
+
+.lesson-balance-message {
+  margin-block: 1rem;
+  padding: .85rem 1rem;
+  border-radius: 12px;
+  background: var(--cream);
+}
+.lesson-balance-message p { margin: 0; }
+.lesson-balance-message p + p { margin-top: .4rem; }
+.lesson-balance-empty {
+  color: #8a241e;
+  background: #fff0ee;
+  border: 1px solid #d8756c;
+}

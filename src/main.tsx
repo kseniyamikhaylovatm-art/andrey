@@ -6,7 +6,8 @@ import {AppContext,tabs,type Tab} from './context';
 import {readRoute,routeHash} from './navigation';
 import type {AppState,AccessSession,WorkspaceMeta} from './types';
 import {api,workspaceApi,uploadPdf,ApiError} from './api';
-import {Button,Loading} from './ui';
+import {Button,Loading,Modal} from './ui';
+import {paymentBalance} from './payment-balance';
 import {PlanPage,CabinetPage,StudentLessonsPage,ProgressPage,PaymentPage} from './overview';
 import {CardsPage} from './cards';
 import {VerbsPage} from './verbs';
@@ -46,6 +47,7 @@ function WorkspaceHeader({teacher,name,children,logout}:{teacher:boolean;name?:s
 function StudentWorkspace({studentId,session,notify,expired,logout,roster}:{studentId:string;session:AccessSession;notify:(message:string)=>void;expired:()=>void;logout:()=>void;roster:()=>void}){
   const client=useMemo(()=>workspaceApi(studentId),[studentId]);
   const [data,setData]=useState<{state:AppState;meta:WorkspaceMeta}|null>(null),[error,setError]=useState(''),[route,setRoute]=useState(readRoute),[mobile,setMobile]=useState(false);
+  const [balanceAcknowledged,setBalanceAcknowledged]=useState(false);
   const teacher=session.role==='teacher';
   const tab=teacher&&!location.hash?'cabinet':route.tab;
   const refresh=useCallback(async()=>{try{const result=await client<NonNullable<typeof data>>('/state');setData(result);setError('');}catch(e){if(e instanceof ApiError&&e.status===401)expired();else setError((e as Error).message);throw e;}},[client,expired]);
@@ -57,7 +59,16 @@ function StudentWorkspace({studentId,session,notify,expired,logout,roster}:{stud
   if(!data)return <Loading/>;
   const Page=tab==='cabinet'&&!teacher?StudentLessonsPage:components[tab],due=data.state.cards.filter(c=>c.enabled&&(c.seen===0||Date.parse(c.due)<=Date.now())).length;
   const available=tabs,exportURL='/api/export?studentId='+encodeURIComponent(studentId);
-  return <AppContext.Provider value={{...data,api:client,uploadPdf:file=>uploadPdf(file,studentId),refresh,notify,go,run}}><div className="app-shell"><MonthlyCheckIn/>
+  const balance=!teacher&&!balanceAcknowledged?paymentBalance(data.state):null;
+  const dismissBalance=()=>setBalanceAcknowledged(true);
+  return <AppContext.Provider value={{...data,api:client,uploadPdf:file=>uploadPdf(file,studentId),refresh,notify,go,run}}>{balance&&<Modal title="Остаток оплаченных уроков" close={dismissBalance}>
+      <div className={'lesson-balance-message'+(balance.remaining<=0?' lesson-balance-empty':'')}>
+        {balance.remaining>0?<p>Осталось <strong>{balance.remaining} из {balance.paid}</strong> оплаченных уроков.</p>:
+          <><p><strong>Оплаченных уроков нет: 0 на счету.</strong></p><p>Свяжитесь с преподавателем для оплаты.</p></>}
+      </div>
+      <div className="form-actions"><Button onClick={dismissBalance}>ОК</Button></div>
+    </Modal>}
+    <div className="app-shell" inert={Boolean(balance)}>{!balance&&<MonthlyCheckIn/>}
     <WorkspaceHeader teacher={teacher} name={data.meta.student.name} logout={data.meta.protected?logout:undefined}>
       {teacher&&<button className="header-pill students-link" onClick={roster}><Users size={18}/>Мои ученики</button>}
       <button className="icon-btn" title="Обновить данные" aria-label="Обновить данные" onClick={()=>void refresh().catch(()=>{})}><RefreshCw size={18}/></button>
@@ -66,7 +77,7 @@ function StudentWorkspace({studentId,session,notify,expired,logout,roster}:{stud
     </WorkspaceHeader>
     <div className="workspace-main"><nav id="main-navigation" className={'primary-nav '+(mobile?'is-open':'')} aria-label="Основная навигация">{available.map(item=><a key={item.id} href={'#'+item.id} className={tab===item.id?'active':''} aria-current={tab===item.id?'page':undefined}><span>{item.id==='cabinet'?(teacher?'Кабинет':'Уроки'):item.label}</span>{item.id==='cards'&&due>0&&<span className="nav-count">{due}</span>}</a>)}<div className="mobile-utilities">{teacher&&<button className="text-link" onClick={roster}><Users size={17}/> Мои ученики</button>}<button className="text-link" onClick={()=>void refresh().catch(()=>{})}><RefreshCw size={17}/> Обновить данные</button><a href={exportURL} className="text-link"><Download size={17}/> Скачать резервную копию</a>{data.meta.protected&&<button className="text-link" onClick={logout}><LogOut size={17}/> Выйти</button>}</div></nav>
       <div className="student-context"><span>{teacher?'Кабинет ученика:':'Ваш кабинет:'}</span><span className="student-name">{data.meta.student.name} <span>· {data.state.plan.level.split('·')[0].trim()}</span></span><span className="context-caption">{teacher?'Доступ преподавателя':'Личные материалы и прогресс'}</span></div>
-      <main className="content" key={tab+route.search}>{data.meta.demo&&<TrialNotice/>}{error&&<p role="alert">{error}</p>}<Page/></main><footer className="footer"><span>Mi español · {data.meta.student.name}</span><span>Учебные материалы и практика</span></footer>
+      <main className="content" key={tab+route.search}>{data.meta.demo&&<TrialNotice/>}{error&&<p role="alert">{error}</p>}{!balance&&<Page/>}</main><footer className="footer"><span>Mi español · {data.meta.student.name}</span><span>Учебные материалы и практика</span></footer>
     </div></div></AppContext.Provider>;
 }
 createRoot(document.getElementById('root')!).render(<React.StrictMode><App/></React.StrictMode>);
