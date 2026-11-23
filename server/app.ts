@@ -30,7 +30,7 @@ const date=z.iso.date();
 const seconds=z.number().min(0).max(1800).default(0);
 const tense=z.enum(Object.keys(tenseNames) as [Tense,...Tense[]]);
 const exampleTense=z.enum(Object.keys(exampleTenseNames) as [ExampleTense,...ExampleTense[]]);
-const example=z.object({es:str,ru:str,tense:z.string().max(100).optional(),level:z.string().max(80).optional()});
+const example=z.object({es:str,ru:z.string().trim().max(4000),tense:z.string().max(100).optional(),level:z.string().max(80).optional()});
 const cardInput=z.object({imageUrl:z.union([z.literal(''),z.url().startsWith('https://')]).optional(),es:str,ru:str,type:z.enum(['word','chunk','construction']).default('word'),topic:str,register:z.enum(['neutral','colloquial','vulgar']).default('neutral'),source:z.string().max(4000).default('Добавлено преподавателем'),examples:z.array(example).max(20).default([]),enabled:z.boolean().optional(),focused:z.boolean().optional()});
 const normalize=wordKey;
 const find=<T extends {id:string}>(items:T[],key:string)=>{const x=items.find(v=>v.id===key);if(!x)throw new AppError(404,'Запись не найдена. Обновите страницу.');return x;};

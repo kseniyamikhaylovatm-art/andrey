@@ -1,20 +1,28 @@
 import {z} from 'zod';
-import type {AppState,Card,LessonWordResult} from '../src/types.js';
+import type {AppState,Card,Example,LessonWordResult} from '../src/types.js';
 import {AppError} from './ai.js';
 import {id} from './domain.js';
 import {parseCardPairs} from './card-import.js';
 
 export const wordKey=(value:string)=>value.trim().toLocaleLowerCase('es').normalize('NFC').replace(/[.!?¿¡]+$/g,'').replace(/\s+/g,' ');
-export const lessonWordInput=z.object({
+const lessonExample=z.object({es:z.string().trim().min(1).max(4000),ru:z.string().trim().max(4000).default('')});
+const lessonWordDetails=z.object({
   date:z.iso.date(),lessonId:z.string().min(1).max(100).optional(),
   title:z.string().trim().max(200).default(''),topic:z.string().trim().min(1).max(200).default('Повседневное'),
-  text:z.string().trim().min(1).max(10000),
 });
+const lessonPair=z.object({es:z.string().trim().min(1).max(4000),ru:z.string().trim().min(1).max(4000),example:lessonExample.optional()});
+export const lessonWordInput=z.union([
+  lessonWordDetails.extend({pair:lessonPair}),
+  lessonWordDetails.extend({text:z.string().trim().min(1).max(10000),example:lessonExample.optional()}),
+]);
 export function addLessonWord(state:AppState,input:z.infer<typeof lessonWordInput>):LessonWordResult {
+  if('pair' in input)return saveLessonWord(state,input,input.pair);
   const parsed=parseCardPairs(input.text);
   if(parsed.cards.length!==1||parsed.issues.length)throw new AppError(400,'Введите одну пару: испанское слово — русский перевод. Например: el barrio — район.');
-  const pair=parsed.cards[0];
-  if(pair.es.length>4000||pair.ru.length>4000)throw new AppError(400,'Слово и перевод должны быть не длиннее 4000 символов.');
+  return saveLessonWord(state,input,{...parsed.cards[0],example:input.example});
+}
+
+function saveLessonWord(state:AppState,input:z.infer<typeof lessonWordDetails>,pair:{es:string;ru:string;example?:Example}):LessonWordResult {
   let lesson=input.lessonId?state.lessons.find(item=>item.id===input.lessonId):state.lessons.find(item=>item.date===input.date);
   if(input.lessonId&&!lesson)throw new AppError(404,'Урок не найден. Выберите урок заново.');
   if(lesson&&lesson.date!==input.date)throw new AppError(400,'Дата не совпадает с выбранным уроком. Выберите урок заново.');
@@ -27,16 +35,35 @@ export function addLessonWord(state:AppState,input:z.infer<typeof lessonWordInpu
     state.cards.push(card);
     if(!state.plan.topics.includes(card.topic))state.plan.topics.push(card.topic);
   }
+  if(pair.example){
+    const example=pair.example;
+    const existing=card.examples.find(item=>!item.level&&!item.tense&&wordKey(item.es)===wordKey(example.es)&&
+      (!item.ru||!example.ru||wordKey(item.ru)===wordKey(example.ru)));
+    if(existing){
+      if(!existing.ru)existing.ru=example.ru;
+    }else{
+      if(card.examples.length>=20)throw new AppError(400,'В карточке «'+card.es+'» уже 20 примеров. Удалите лишний пример в редакторе карточки.');
+      card.examples.unshift(example);
+    }
+  }
   lesson.cardIds=[...new Set([...(lesson.cardIds||[]),card.id])];
   lesson.status='held';
   return {lessonId:lesson.id,cardId:card.id,created,translationKept:!created&&wordKey(card.ru)!==wordKey(pair.ru),enabled:card.enabled};
 }
 
-export const lessonWordsInput=lessonWordInput.extend({text:z.string().trim().min(1).max(200000)});
+export const lessonWordsInput=z.union([
+  lessonWordDetails.extend({rows:z.array(lessonPair).min(1).max(100)}),
+  lessonWordDetails.extend({text:z.string().trim().min(1).max(200000)}),
+]);
 export function addLessonWords(state:AppState,input:z.infer<typeof lessonWordsInput>){
- const parsed=parseCardPairs(input.text);
+ const rows='rows' in input?input.rows:parseLessonPairs(input.text);
+ const results=rows.map(pair=>saveLessonWord(state,input,pair));
+ return {lessonId:results[0].lessonId,added:results.filter(result=>result.created).length,reused:results.filter(result=>!result.created).length,translationKept:results.filter(result=>result.translationKept).length,disabled:results.filter(result=>!result.enabled).length};
+}
+
+function parseLessonPairs(text:string){
+ const parsed=parseCardPairs(text);
  if(parsed.issues.length)throw new AppError(400,'Проверьте строки: '+parsed.issues.map(issue=>issue.line).join(', ')+'. Нужны пары «слово — перевод».');
  if(!parsed.cards.length||parsed.cards.length>100)throw new AppError(400,'Добавьте от 1 до 100 слов за один раз.');
- const results=parsed.cards.map(pair=>addLessonWord(state,{...input,text:pair.es+' — '+pair.ru}));
- return {lessonId:results[0].lessonId,added:results.filter(result=>result.created).length,reused:results.filter(result=>!result.created).length,translationKept:results.filter(result=>result.translationKept).length,disabled:results.filter(result=>!result.enabled).length};
+ return parsed.cards;
 }

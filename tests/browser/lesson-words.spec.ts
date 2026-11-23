@@ -110,3 +110,45 @@ test('Miro board belongs to the selected learner and imported vocabulary reaches
  await page.getByRole('dialog').getByRole('button',{name:'Закрыть',exact:true}).click();await expect(page.locator('.lesson-word-row')).toHaveCount(2);
  await page.getByRole('link',{name:'Глаголы',exact:true}).click();await expect(page.getByRole('button',{name:'cuidar',exact:true})).toBeVisible();
 });
+
+test('manual examples become Russian-to-Spanish self-check cards without AI',async({page})=>{
+  const {student}=await openNewStudent(page,'Ручные примеры · целые фразы');
+  const spanishExample='La lámpara está encendida.';
+  const russianExample='Лампа включена.';
+  await page.getByLabel('Слово на испанском',{exact:true}).fill('lámpara');
+  await page.getByLabel('Перевод слова на русский',{exact:true}).fill('лампа');
+  await page.getByLabel('Пример на испанском',{exact:true}).fill(spanishExample);
+  await page.getByLabel('Перевод примера на русский',{exact:true}).fill(russianExample);
+  await page.getByRole('button',{name:'Добавить слово',exact:true}).click();
+  await page.locator('.lesson-word-row').filter({hasText:'lámpara'}).locator('.lesson-word-reveal').click();
+  await expect(page.getByText(spanishExample,{exact:true})).toBeVisible();
+
+  await page.getByRole('button',{name:'Списком',exact:true}).click();
+  await page.getByLabel('Список слов',{exact:true}).fill(
+    'ventana — окно | Abro la ventana. | Я открываю окно.\nvaso — стакан | El vaso es de cristal.'
+  );
+  await page.getByRole('button',{name:'Добавить список',exact:true}).click();
+  await expect(page.locator('.lesson-word-row')).toHaveCount(3);
+  const headers={'X-Student-Id':student.id};
+  const {state}=await (await page.request.get('/api/state',{headers})).json();
+  expect(state.cards.map((card:{examples:unknown[]})=>card.examples)).toEqual([
+    [{es:spanishExample,ru:russianExample}],
+    [{es:'Abro la ventana.',ru:'Я открываю окно.'}],
+    [{es:'El vaso es de cristal.',ru:''}]
+  ]);
+
+  await page.getByRole('link',{name:/^Автоматизация/}).click();
+  await page.getByRole('button',{name:'Практика целых фраз',exact:true}).click();
+  await page.getByRole('button',{name:'Начать практику'}).click();
+  await expect(page.getByRole('heading',{name:russianExample,exact:true})).toBeVisible();
+  await expect(page.getByText(spanishExample,{exact:true})).toHaveCount(0);
+  await page.getByRole('button',{name:'Показать ответ'}).click();
+  await expect(page.getByText(spanishExample,{exact:true})).toBeVisible();
+  await page.getByRole('button',{name:'Следующая фраза'}).click();
+  await expect(page.getByRole('heading',{name:'Я открываю окно.',exact:true})).toBeVisible();
+  await expect(page.getByText('Abro la ventana.',{exact:true})).toHaveCount(0);
+  await page.getByRole('button',{name:'Показать ответ'}).click();
+  await expect(page.getByText('Abro la ventana.',{exact:true})).toBeVisible();
+  await page.getByRole('button',{name:'Завершить',exact:true}).click();
+  await expect(page.getByRole('heading',{name:'Практика завершена'})).toBeVisible();
+});
