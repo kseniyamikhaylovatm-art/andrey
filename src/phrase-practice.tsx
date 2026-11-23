@@ -32,7 +32,7 @@ export function PhrasePractice({cards}:{cards:Card[]}){
     <h2>{session.length?'Практика завершена':'Практика целых фраз'}</h2>
     {session.length>0&&<p>Фраз просмотрено: {session.length}</p>}
     {pairs.size?<Button onClick={start}>{session.length?'Повторить фразы':'Начать практику'} <ArrowRight size={18}/></Button>
-      :<Empty>Здесь появятся фразы и примеры с русским переводом.</Empty>}
+      :<Empty>В этой подборке нет фраз или примеров с русским переводом.</Empty>}
   </Panel>;
 
   return <div className="practice-layout memory-layout">

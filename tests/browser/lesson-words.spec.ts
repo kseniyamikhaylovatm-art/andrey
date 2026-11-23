@@ -113,6 +113,8 @@ test('Miro board belongs to the selected learner and imported vocabulary reaches
 
 test('manual examples become Russian-to-Spanish self-check cards without AI',async({page})=>{
   const {student}=await openNewStudent(page,'Ручные примеры · целые фразы');
+  await page.getByLabel('Дата урока',{exact:true}).fill('2026-11-22');
+  await page.getByRole('combobox',{name:/^Тема слова/}).fill('Освещение');
   const spanishExample='La lámpara está encendida.';
   const russianExample='Лампа включена.';
   await page.getByLabel('Слово на испанском',{exact:true}).fill('lámpara');
@@ -123,12 +125,14 @@ test('manual examples become Russian-to-Spanish self-check cards without AI',asy
   await page.locator('.lesson-word-row').filter({hasText:'lámpara'}).locator('.lesson-word-reveal').click();
   await expect(page.getByText(spanishExample,{exact:true})).toBeVisible();
 
+  await page.getByLabel('Дата урока',{exact:true}).fill('2026-11-23');
+  await page.getByRole('combobox',{name:/^Тема слова/}).fill('Дом');
   await page.getByRole('button',{name:'Списком',exact:true}).click();
   await page.getByLabel('Список слов',{exact:true}).fill(
     'ventana — окно | Abro la ventana. | Я открываю окно.\nvaso — стакан | El vaso es de cristal.'
   );
   await page.getByRole('button',{name:'Добавить список',exact:true}).click();
-  await expect(page.locator('.lesson-word-row')).toHaveCount(3);
+  await expect(page.locator('.lesson-word-row')).toHaveCount(2);
   const headers={'X-Student-Id':student.id};
   const {state}=await (await page.request.get('/api/state',{headers})).json();
   expect(state.cards.map((card:{examples:unknown[]})=>card.examples)).toEqual([
@@ -151,4 +155,20 @@ test('manual examples become Russian-to-Spanish self-check cards without AI',asy
   await expect(page.getByText('Abro la ventana.',{exact:true})).toBeVisible();
   await page.getByRole('button',{name:'Завершить',exact:true}).click();
   await expect(page.getByRole('heading',{name:'Практика завершена'})).toBeVisible();
+
+  const topic=page.getByRole('combobox',{name:'Выберите тему'});
+  const lesson=page.getByRole('combobox',{name:'Слова какого урока'});
+  await topic.selectOption('Освещение');
+  await page.getByRole('button',{name:'Начать практику'}).click();
+  await expect(page.getByRole('heading',{name:russianExample,exact:true})).toBeVisible();
+  await expect(page.locator('.anki-card .section-heading')).toContainText('1 / 1');
+  await expect(lesson.getByRole('option',{name:/^23 ноября 2026/})).toBeAttached();
+  const november23=state.lessons.find((item:{date:string})=>item.date==='2026-11-23');
+  await lesson.selectOption(november23.id);
+  await expect(page.getByText('В этой подборке нет фраз или примеров с русским переводом.')).toBeVisible();
+  await topic.selectOption('Всё');
+  await page.getByRole('button',{name:'Начать практику'}).click();
+  await expect(page.getByRole('heading',{name:'Я открываю окно.',exact:true})).toBeVisible();
+  await expect(page.locator('.anki-card .section-heading')).toContainText('1 / 1');
+
 });
