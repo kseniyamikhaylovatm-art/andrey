@@ -61,6 +61,7 @@ export function createApp(store:Store) {
     }
     next();
   });
+  app.use('/api/lesson-words/batch',express.json({limit:'16mb'}));
   app.use(express.json({limit:'2mb'}));
   app.get('/api/health',(_req,res)=>res.json({ok:true}));
   app.get('/api/session',(req,res)=>res.json(access.session(access.principal(req))));
@@ -258,6 +259,7 @@ export function createApp(store:Store) {
     if(err instanceof z.ZodError){res.status(400).json({error:'Проверьте поля формы: '+err.issues.map(x=>x.path.join('.')+': '+x.message).join('; ')});return;}
     if(err instanceof AppError){res.status(err.status).json({error:err.message});return;}
     const status=(err as {status?:number})?.status;
+    if(status===413&&req.path==='/api/lesson-words/batch'){res.status(413).json({error:'Список превышает 16 МБ. Разделите его на части и добавьте их за тот же урок.'});return;}
     if(status===413){res.status(413).json({error:req.path.startsWith('/api/library/books')?'PDF слишком большой (максимум 30 МБ).':'Файл слишком большой (максимум 15 МБ).'});return;}
     console.error('Request failed:',err instanceof Error?err.name:'Unknown error');res.status(500).json({error:'Не удалось выполнить действие. Данные сохранены; попробуйте ещё раз.'});
   });

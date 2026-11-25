@@ -172,3 +172,18 @@ test('manual examples become Russian-to-Spanish self-check cards without AI',asy
   await expect(page.locator('.anki-card .section-heading')).toContainText('1 / 1');
 
 });
+
+test('imports more than 100 words in one lesson and assigns heading topics to the cards',async({page})=>{
+  const {student}=await openNewStudent(page,'Большой список по темам');
+  await page.getByRole('button',{name:'Списком',exact:true}).click();
+  const city=Array.from({length:120},(_,i)=>`barrio ${i} — район ${i} | Vivo en el barrio ${i}. | Я живу в районе ${i}.`);
+  await page.getByLabel('Список слов',{exact:true}).fill([
+    '# Город',...city,'','Тема: Дом','la cocina — кухня','Estoy en la cocina.','Я на кухне.'
+  ].join('\n'));
+  await page.getByRole('button',{name:'Добавить список',exact:true}).click();
+  await expect(page.locator('.lesson-word-row')).toHaveCount(121);
+  const {state}=await (await page.request.get('/api/state',{headers:{'X-Student-Id':student.id}})).json();
+  expect(state.lessons).toHaveLength(1);
+  expect(state.cards.filter((card:{topic:string})=>card.topic==='Город')).toHaveLength(120);
+  expect(state.cards.at(-1)).toMatchObject({es:'la cocina',topic:'Дом',examples:[{es:'Estoy en la cocina.',ru:'Я на кухне.'}]});
+});

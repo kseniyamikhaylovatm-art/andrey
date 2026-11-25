@@ -39,7 +39,7 @@ export function WordsPage(){
         if(listMode){
           const saved=await run(async()=>{
             const rows=lessonList(listText),missing=rows.filter(row=>!row.ru);
-            if(missing.length>50)throw new Error('За один раз можно автоматически перевести до 50 слов. Пары с переводом — до 100.');
+            if(missing.length>50)throw new Error('За один раз можно автоматически перевести до 50 слов.');
             if(missing.length&&!meta.ai)throw new Error('Автоперевод пока не подключён. Добавьте русский перевод в каждую строку: слово — перевод.');
             for(let index=0;index<missing.length;index++){setProgress('Переводим '+(index+1)+' из '+missing.length);const translated=await api<{ru:string}>('/ai/translate-word',{es:missing[index].es});missing[index].ru=translated.ru;}
             setProgress('Сохраняем список…');
@@ -68,8 +68,8 @@ export function WordsPage(){
         setBusy(false);
         if(result){setSelectedId(result.lessonId);setText('');setTitle('');setTranslation('');setExampleText('');setExampleTranslation('');notify(!result.enabled?'Слово добавлено к уроку. Карточка выключена — включите её для тренировки.':result.translationKept?'Слово добавлено к уроку. В базе сохранён прежний перевод; его можно исправить кнопкой с карандашом.':result.created?'Слово сохранено в уроке и в «Автоматизации».':'Слово уже было в базе. Оно добавлено к этому уроку, прогресс сохранён.');requestAnimationFrame(()=>input.current?.focus());}
       }}><div className="lesson-entry-meta"><Field label="Дата урока"><input type="date" value={lesson?.date||date} disabled={busy} onChange={event=>{setDate(event.target.value);setSelectedId('');}} required/></Field>{lesson?<div className="lesson-entry-selected"><CalendarDays size={19}/><span>{lesson.title}</span></div>:<Field label="Название урока · необязательно"><input value={title} disabled={busy} maxLength={200} placeholder="Например, В ресторане" onChange={event=>setTitle(event.target.value)}/></Field>}<Field label="Тема слова"><input value={topic} disabled={busy} maxLength={200} list="lesson-word-topics" onChange={event=>setTopic(event.target.value)} required/><datalist id="lesson-word-topics">{s.plan.topics.map(item=><option key={item}>{item}</option>)}</datalist></Field></div>
-        {listMode?<><Field label="Список слов"><textarea ref={listInput} value={listText} disabled={busy} onChange={event=>setListText(event.target.value)} rows={8} required maxLength={200000} placeholder={'el comedor — столовая | Comemos en el comedor. | Мы едим в столовой.\nla cocina — кухня'} onKeyDown={event=>{if(event.key==='Enter'&&(event.ctrlKey||event.metaKey)){event.preventDefault();event.currentTarget.form?.requestSubmit();}}}/></Field>
-          <p className="small muted">Вставьте «слово — перевод», а со следующей строки — пример. Разделяйте записи пустой строкой. Можно записать всё в одну строку через |. До 100 записей.</p>
+        {listMode?<><Field label="Список слов"><textarea ref={listInput} value={listText} disabled={busy} onChange={event=>setListText(event.target.value)} rows={8} required placeholder={'# В ресторане\nel comedor — столовая | Comemos en el comedor. | Мы едим в столовой.\n\n# Дом\nla cocina — кухня | Estoy en la cocina. | Я на кухне.'} onKeyDown={event=>{if(event.key==='Enter'&&(event.ctrlKey||event.metaKey)){event.preventDefault();event.currentTarget.form?.requestSubmit();}}}/></Field>
+          <p className="small muted">Начинайте группу с «Тема: название» или «# Название». Под заголовком вставьте записи «слово — перевод | пример | перевод примера». Можно записать пример и его перевод на следующих строках, отделяя записи пустой строкой.</p>
           <Button type="submit" disabled={busy||!listText.trim()}>{busy?progress||'Проверяем список…':'Добавить список'}</Button>
         </>:<>
           <div className="form-row">
