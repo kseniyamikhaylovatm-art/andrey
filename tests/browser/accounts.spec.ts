@@ -44,7 +44,7 @@ test('teacher switching keeps card imports, exports and unsent speech drafts in 
   const first=page.locator('.student-card').filter({has:page.getByRole('heading',{name:'Мария',exact:true})});await first.getByRole('button',{name:'Открыть кабинет'}).click();
   const review = page.locator('main').getByRole('heading',{name:'Повтор слов',exact:true});
   await expect(review).toBeVisible();
-  const words = page.locator('.teacher-review-words li');
+  const words = page.locator('.teacher-review-word');
   await page.getByRole('button',{name:'Выбрать 10 случайных слов'}).click();
   await expect(words).toHaveCount(10);
   const selectedWords = await words.allTextContents();
@@ -53,6 +53,21 @@ test('teacher switching keeps card imports, exports and unsent speech drafts in 
   const {state} = await (await page.request.get(exportHref!)).json();
   const enabledWords = new Set(state.cards.filter((card:{enabled:boolean})=>card.enabled).map((card:{es:string})=>card.es));
   expect(selectedWords.every(word=>enabledWords.has(word))).toBe(true);
+  const firstWord=words.first();
+  const expected=state.cards.find((card:{es:string})=>card.es===selectedWords[0]).ru;
+  const translation=page.locator('.teacher-review-translation').first();
+  await expect(translation).toBeHidden();
+  await firstWord.hover();
+  await expect(translation).toBeVisible();
+  await expect(translation).toHaveText(expected);
+  await review.hover();
+  await expect(translation).toBeHidden();
+  await firstWord.focus();
+  await firstWord.press('Enter');
+  await expect(translation).toBeVisible();
+  await firstWord.press('Escape');
+  await expect(translation).toBeHidden();
+
   await page.getByRole('button',{name:'Выбрать ещё раз'}).click();
   await expect(words).toHaveCount(10);
   await page.getByRole('link',{name:/^Автоматизация/}).click();await page.getByRole('button',{name:'Загрузить PDF карточек',exact:true}).click();await page.getByRole('textbox',{name:'Список карточек',exact:false}).fill('el lápiz — карандаш');await page.getByRole('button',{name:'Проверить список',exact:true}).click();await page.getByRole('button',{name:'Добавить все карточки',exact:true}).click();await expect(page.getByRole('dialog').getByRole('status')).toContainText('Добавлено: 1');await page.getByRole('dialog').getByRole('button',{name:'Закрыть',exact:true}).click();

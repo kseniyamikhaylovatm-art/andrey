@@ -81,6 +81,38 @@
   overflow-wrap: anywhere;
 }
 
+.teacher-review-words > li { position: relative; min-width: 0; }
+.teacher-review-word {
+  background: transparent;
+  border: 0;
+  color: inherit;
+  padding: 0;
+  text-align: start;
+  font: inherit;
+  overflow-wrap: anywhere;
+  max-width: 100%;
+}
+.teacher-review-word:hover,
+.teacher-review-word[aria-expanded="true"] {
+  text-decoration: underline dotted;
+  text-underline-offset: .18em;
+}
+.teacher-review-translation {
+  position: absolute;
+  z-index: 2;
+  top: 100%;
+  inset-inline-start: 0;
+  width: max-content;
+  max-width: min(100%, 22rem);
+  padding: .5rem .7rem;
+  border-radius: .5rem;
+  background: var(--navy);
+  color: #fff;
+  box-shadow: 0 4px 12px #102c4330;
+  font-size: 1rem;
+  font-weight: 500;
+}
+
 .teacher-review-heading {
   flex-wrap: wrap;
   gap: .65rem;
